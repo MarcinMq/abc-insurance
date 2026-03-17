@@ -15,7 +15,8 @@
       "base_price_monthly": "45.00",
       "max_coverage_amount": "5000000.00",
       "min_coverage_amount": "1000000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -36,7 +37,8 @@
       "base_price_monthly": "120.00",
       "max_coverage_amount": "500000.00",
       "min_coverage_amount": "10000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -57,7 +59,8 @@
       "base_price_monthly": "75.00",
       "max_coverage_amount": "2000000.00",
       "min_coverage_amount": "50000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -79,7 +82,8 @@
       "base_price_monthly": "150.00",
       "max_coverage_amount": "500000.00",
       "min_coverage_amount": "100000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -98,7 +102,8 @@
       "base_price_monthly": "200.00",
       "max_coverage_amount": "1000000.00",
       "min_coverage_amount": "100000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   },
   {
@@ -119,7 +124,8 @@
       "base_price_monthly": "25.00",
       "max_coverage_amount": "100000.00",
       "min_coverage_amount": "50000.00",
-      "is_active": true
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z"
     }
   }
 ]

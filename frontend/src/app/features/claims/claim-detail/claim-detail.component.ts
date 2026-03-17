@@ -8,10 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatListModule } from '@angular/material/list';
-import { MatTimelineModule } from '@angular/material/legacy-list';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -28,7 +25,7 @@ import { Claim, STATUS_CONFIG, ClaimStatus, AllowedNextStatus } from '../../../s
     CommonModule, RouterLink, ReactiveFormsModule,
     MatCardModule, MatButtonModule, MatIconModule, MatChipsModule,
     MatDividerModule, MatListModule, MatDialogModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule,
+    MatSelectModule,
     MatProgressSpinnerModule, MatSnackBarModule, MatExpansionModule, MatTooltipModule,
   ],
   template: `
@@ -167,33 +164,48 @@ import { Claim, STATUS_CONFIG, ClaimStatus, AllowedNextStatus } from '../../../s
               <mat-card-title>Zarządzanie szkodą</mat-card-title>
             </mat-card-header>
             <mat-card-content>
-              <form [formGroup]="statusForm" (ngSubmit)="updateStatus()">
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Nowy status</mat-label>
-                  <mat-select formControlName="status">
-                    <mat-option *ngFor="let s of claim.allowed_next_statuses" [value]="s.value">
-                      {{ s.label }}
-                    </mat-option>
-                  </mat-select>
-                </mat-form-field>
+              <form [formGroup]="statusForm" (ngSubmit)="updateStatus()" class="agent-form">
 
-                <mat-form-field appearance="outline" class="full-width"
-                                *ngIf="requiresAmount">
-                  <mat-label>Kwota do wypłaty (PLN)</mat-label>
-                  <input matInput type="number" formControlName="approved_amount" />
-                  <mat-hint>Max: {{ claim.estimated_damage | currency:'PLN':'symbol':'1.0-0':'pl' }}</mat-hint>
-                </mat-form-field>
+                <div class="af-group">
+                  <label class="af-label">Nowy status</label>
+                  <div class="af-select-wrap">
+                    <mat-icon class="af-icon">swap_horiz</mat-icon>
+                    <select formControlName="status" class="af-select">
+                      <option value="">— Wybierz status —</option>
+                      <option *ngFor="let s of claim.allowed_next_statuses" [value]="s.value">
+                        {{ s.label }}
+                      </option>
+                    </select>
+                    <mat-icon class="af-arrow">expand_more</mat-icon>
+                  </div>
+                </div>
 
-                <mat-form-field appearance="outline" class="full-width"
-                                *ngIf="requiresRejectionReason">
-                  <mat-label>Powód odrzucenia</mat-label>
-                  <textarea matInput formControlName="rejection_reason" rows="3"></textarea>
-                </mat-form-field>
+                <div class="af-group" *ngIf="requiresAmount">
+                  <label class="af-label">Kwota do wypłaty (PLN)</label>
+                  <div class="af-input-wrap">
+                    <mat-icon class="af-icon">monetization_on</mat-icon>
+                    <input type="number" formControlName="approved_amount" class="af-input"
+                           placeholder="0.00" min="0.01" />
+                    <span class="af-suffix">PLN</span>
+                  </div>
+                  <span class="af-hint">Max: {{ claim.estimated_damage | currency:'PLN':'symbol':'1.0-0':'pl' }}</span>
+                </div>
 
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Komentarz (opcjonalny)</mat-label>
-                  <textarea matInput formControlName="comment" rows="2"></textarea>
-                </mat-form-field>
+                <div class="af-group" *ngIf="requiresRejectionReason">
+                  <label class="af-label">Powód odrzucenia</label>
+                  <div class="af-input-wrap af-textarea-wrap">
+                    <textarea formControlName="rejection_reason" class="af-textarea"
+                              rows="3" placeholder="Opisz powód odrzucenia..."></textarea>
+                  </div>
+                </div>
+
+                <div class="af-group">
+                  <label class="af-label">Komentarz (opcjonalny)</label>
+                  <div class="af-input-wrap af-textarea-wrap">
+                    <textarea formControlName="comment" class="af-textarea"
+                              rows="2" placeholder="Dodaj komentarz..."></textarea>
+                  </div>
+                </div>
 
                 <button mat-raised-button color="primary" type="submit"
                         class="full-width" [disabled]="statusForm.invalid || actionLoading">
@@ -298,6 +310,38 @@ import { Claim, STATUS_CONFIG, ClaimStatus, AllowedNextStatus } from '../../../s
       background: #f5f7fa; padding: 6px 8px; border-radius: 4px; }
     .loading-container { display: flex; justify-content: center; padding: 80px; }
     @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+
+    /* Agent form custom inputs */
+    .agent-form { display: flex; flex-direction: column; gap: 12px; }
+    .af-group { display: flex; flex-direction: column; gap: 5px; }
+    .af-label { font-size: 12px; font-weight: 600; color: #475569; }
+    .af-select-wrap, .af-input-wrap {
+      display: flex; align-items: center;
+      border: 1.5px solid #e2e8f0; border-radius: 8px;
+      background: #f8fafc; overflow: hidden; transition: border-color .2s;
+    }
+    .af-select-wrap:focus-within, .af-input-wrap:focus-within {
+      border-color: #4f46e5; background: white;
+    }
+    .af-textarea-wrap { align-items: flex-start; }
+    .af-icon { color: #94a3b8; margin: 0 8px; font-size: 16px; flex-shrink: 0; }
+    .af-arrow { color: #94a3b8; margin: 0 8px; font-size: 16px; pointer-events: none; flex-shrink: 0; }
+    .af-select {
+      flex: 1; border: none; background: none; padding: 9px 4px;
+      font-size: 13px; color: #0f172a; outline: none; font-family: inherit;
+      cursor: pointer; appearance: none;
+    }
+    .af-input {
+      flex: 1; border: none; background: none; padding: 9px 4px;
+      font-size: 13px; color: #0f172a; outline: none; font-family: inherit;
+    }
+    .af-suffix { padding: 0 10px; font-size: 12px; font-weight: 600; color: #94a3b8; }
+    .af-textarea {
+      flex: 1; border: none; background: none; padding: 9px;
+      font-size: 13px; color: #0f172a; outline: none; font-family: inherit;
+      resize: vertical; width: 100%;
+    }
+    .af-hint { font-size: 11px; color: #94a3b8; }
   `],
 })
 export class ClaimDetailComponent implements OnInit {

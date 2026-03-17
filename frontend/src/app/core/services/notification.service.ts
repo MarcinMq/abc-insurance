@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, interval, Observable, switchMap } from 'rxjs';
+import { BehaviorSubject, interval, Observable, Subject, switchMap, takeUntil } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface Notification {
@@ -21,12 +21,28 @@ export class NotificationService {
   private unreadCountSubject = new BehaviorSubject<number>(0);
   unreadCount$ = this.unreadCountSubject.asObservable();
 
+  private stopPolling$ = new Subject<void>();
+
   constructor(private http: HttpClient) {}
 
   startPolling(): void {
-    interval(30000)
-      .pipe(switchMap(() => this.getUnreadCount()))
-      .subscribe((res) => this.unreadCountSubject.next(res.unread_count));
+    // Zatrzymaj poprzedni polling jeśli był aktywny
+    this.stopPolling$.next();
+
+    interval(60000)
+      .pipe(
+        takeUntil(this.stopPolling$),
+        switchMap(() => this.getUnreadCount())
+      )
+      .subscribe({
+        next: (res) => this.unreadCountSubject.next(res.unread_count),
+        error: () => { /* cicha obsługa błędów pollingu */ },
+      });
+  }
+
+  stopPolling(): void {
+    this.stopPolling$.next();
+    this.unreadCountSubject.next(0);
   }
 
   getNotifications(): Observable<any> {
@@ -42,14 +58,13 @@ export class NotificationService {
   }
 
   markAllRead(): Observable<{ marked_read: number }> {
-    return this.http.post<{ marked_read: number }>(`${this.base}/mark-all-read/`, {}).pipe(
-      // Aktualizacja licznika
-    );
+    return this.http.post<{ marked_read: number }>(`${this.base}/mark-all-read/`, {});
   }
 
   refreshCount(): void {
-    this.getUnreadCount().subscribe((res) => {
-      this.unreadCountSubject.next(res.unread_count);
+    this.getUnreadCount().subscribe({
+      next: (res) => this.unreadCountSubject.next(res.unread_count),
+      error: () => { /* token może jeszcze nie być gotowy */ },
     });
   }
 }

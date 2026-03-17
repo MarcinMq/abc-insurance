@@ -13,6 +13,9 @@ export class AuthService {
   private currentUserSubject = new BehaviorSubject<User | null>(this.getUserFromToken());
   currentUser$ = this.currentUserSubject.asObservable();
 
+  /** Observable używany w szablonach — eliminuje wywołanie isLoggedIn() w każdym cyklu CD */
+  isLoggedIn$ = this.currentUser$.pipe(map((u) => !!u));
+
   constructor(private http: HttpClient, private router: Router) {}
 
   login(username: string, password: string): Observable<LoginResponse> {
@@ -62,7 +65,17 @@ export class AuthService {
 
   loadUserProfile(): void {
     this.http.get<User>(`${environment.apiUrl}/auth/profile/`).subscribe((user) => {
-      this.currentUserSubject.next(user);
+      const current = this.currentUserSubject.value;
+      // Aktualizuj tylko jeśli dane faktycznie się zmieniły — zapobiega zbędnemu re-renderowi
+      if (
+        !current ||
+        current.id !== user.id ||
+        current.full_name !== user.full_name ||
+        current.role !== user.role ||
+        current.email !== user.email
+      ) {
+        this.currentUserSubject.next(user);
+      }
     });
   }
 
@@ -74,11 +87,9 @@ export class AuthService {
     return localStorage.getItem(this.REFRESH_KEY);
   }
 
+  /** Używaj tylko poza szablonami (guardy, interceptory). W szablonach używaj isLoggedIn$ */
   isLoggedIn(): boolean {
-    const token = this.getAccessToken();
-    if (!token) return false;
-    const payload = this.decodeToken(token);
-    return payload ? payload.exp * 1000 > Date.now() : false;
+    return !!this.currentUserSubject.value;
   }
 
   get currentUser(): User | null {
