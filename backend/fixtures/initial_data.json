@@ -1,0 +1,125 @@
+[
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 1,
+    "fields": {
+      "name": "OC Komunikacyjne",
+      "category": "liability",
+      "description": "Obowiązkowe ubezpieczenie odpowiedzialności cywilnej posiadaczy pojazdów mechanicznych. Chroni przed roszczeniami osób trzecich w razie wypadku.",
+      "coverage_details": {
+        "bodily_injury": true,
+        "property_damage": true,
+        "eu_coverage": true,
+        "assistance_24h": true
+      },
+      "base_price_monthly": "45.00",
+      "max_coverage_amount": "5000000.00",
+      "min_coverage_amount": "1000000.00",
+      "is_active": true
+    }
+  },
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 2,
+    "fields": {
+      "name": "AC Auto Casco",
+      "category": "auto",
+      "description": "Dobrowolne ubezpieczenie pojazdu obejmujące szkody własne, kradzież oraz inne zdarzenia losowe.",
+      "coverage_details": {
+        "theft": true,
+        "accident": true,
+        "natural_disasters": true,
+        "vandalism": true,
+        "glass_breakage": true,
+        "replacement_vehicle": true
+      },
+      "base_price_monthly": "120.00",
+      "max_coverage_amount": "500000.00",
+      "min_coverage_amount": "10000.00",
+      "is_active": true
+    }
+  },
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 3,
+    "fields": {
+      "name": "Ubezpieczenie Nieruchomości",
+      "category": "property",
+      "description": "Kompleksowe ubezpieczenie domu lub mieszkania od zdarzeń losowych, kradzieży oraz odpowiedzialności cywilnej.",
+      "coverage_details": {
+        "fire": true,
+        "flood": true,
+        "theft": true,
+        "vandalism": true,
+        "third_party_liability": true,
+        "temporary_accommodation": true
+      },
+      "base_price_monthly": "75.00",
+      "max_coverage_amount": "2000000.00",
+      "min_coverage_amount": "50000.00",
+      "is_active": true
+    }
+  },
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 4,
+    "fields": {
+      "name": "Ubezpieczenie Zdrowotne Premium",
+      "category": "health",
+      "description": "Pakiet zdrowotny zapewniający dostęp do prywatnej opieki medycznej, specjalistów i rehabilitacji.",
+      "coverage_details": {
+        "gp_visits": true,
+        "specialists": true,
+        "diagnostics": true,
+        "rehabilitation": true,
+        "dental": false,
+        "mental_health": true,
+        "hospitalization": true
+      },
+      "base_price_monthly": "150.00",
+      "max_coverage_amount": "500000.00",
+      "min_coverage_amount": "100000.00",
+      "is_active": true
+    }
+  },
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 5,
+    "fields": {
+      "name": "Ubezpieczenie na Życie",
+      "category": "life",
+      "description": "Ochrona życia i zdrowie ubezpieczonego wraz z opcją oszczędnościową. Wypłata w razie śmierci lub trwałej niezdolności do pracy.",
+      "coverage_details": {
+        "death": true,
+        "permanent_disability": true,
+        "critical_illness": true,
+        "savings_component": true
+      },
+      "base_price_monthly": "200.00",
+      "max_coverage_amount": "1000000.00",
+      "min_coverage_amount": "100000.00",
+      "is_active": true
+    }
+  },
+  {
+    "model": "policies.insuranceproduct",
+    "pk": 6,
+    "fields": {
+      "name": "Ubezpieczenie Podróżne",
+      "category": "travel",
+      "description": "Ubezpieczenie na czas podróży zagranicznych: koszty leczenia, NNW, bagaż, opóźnienia lotów.",
+      "coverage_details": {
+        "medical_costs": true,
+        "evacuation": true,
+        "baggage": true,
+        "trip_cancellation": true,
+        "flight_delay": true,
+        "personal_accident": true
+      },
+      "base_price_monthly": "25.00",
+      "max_coverage_amount": "100000.00",
+      "min_coverage_amount": "50000.00",
+      "is_active": true
+    }
+  }
+]
