@@ -1,129 +1,85 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap, map } from 'rxjs';
 import { Router } from '@angular/router';
-import { environment } from '../../../environments/environment';
-import { User, LoginResponse, RegisterRequest, JwtPayload } from '../../shared/models/user.model';
+import { tap, switchMap } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { AuthResponse, LoginCredentials, RegisterData, User } from '../models/user.model';
+
+const API = 'http://localhost:8000/api';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly ACCESS_KEY = 'abc_access';
-  private readonly REFRESH_KEY = 'abc_refresh';
+  private _user = signal<User | null>(this.loadUser());
+  private _token = signal<string | null>(localStorage.getItem('access_token'));
 
-  private currentUserSubject = new BehaviorSubject<User | null>(this.getUserFromToken());
-  currentUser$ = this.currentUserSubject.asObservable();
-
-  /** Observable używany w szablonach — eliminuje wywołanie isLoggedIn() w każdym cyklu CD */
-  isLoggedIn$ = this.currentUser$.pipe(map((u) => !!u));
+  readonly user = this._user.asReadonly();
+  readonly isLoggedIn = computed(() => !!this._token());
+  readonly isAgent = computed(() => this._user()?.role === 'agent' || this._user()?.role === 'admin');
+  readonly isCustomer = computed(() => this._user()?.role === 'customer');
+  readonly isAdmin = computed(() => this._user()?.role === 'admin');
 
   constructor(private http: HttpClient, private router: Router) {}
 
-  login(username: string, password: string): Observable<LoginResponse> {
-    return this.http
-      .post<LoginResponse>(`${environment.apiUrl}/auth/login/`, { username, password })
-      .pipe(
-        tap((res) => {
-          localStorage.setItem(this.ACCESS_KEY, res.access);
-          localStorage.setItem(this.REFRESH_KEY, res.refresh);
-          this.currentUserSubject.next(this.getUserFromToken());
-          this.loadUserProfile();
-        })
-      );
+  login(credentials: LoginCredentials): Observable<any> {
+    return this.http.post<AuthResponse>(`${API}/auth/login/`, credentials).pipe(
+      tap(response => {
+        localStorage.setItem('access_token', response.access);
+        localStorage.setItem('refresh_token', response.refresh);
+        this._token.set(response.access);
+      }),
+      switchMap(response => {
+        return this.http.get<User>(`${API}/auth/profile/?_t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${response.access}` }
+        }).pipe(
+          tap(user => {
+            localStorage.setItem('user', JSON.stringify(user));
+            this._user.set(user);
+          })
+        );
+      })
+    );
   }
 
-  register(data: RegisterRequest): Observable<any> {
-    return this.http.post(`${environment.apiUrl}/auth/register/`, data).pipe(
-      tap((res: any) => {
-        localStorage.setItem(this.ACCESS_KEY, res.access);
-        localStorage.setItem(this.REFRESH_KEY, res.refresh);
-        this.currentUserSubject.next(res.user);
+  register(data: RegisterData): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${API}/auth/register/`, data).pipe(
+      tap(response => {
+        localStorage.setItem('access_token', response.access);
+        localStorage.setItem('refresh_token', response.refresh);
+        this._token.set(response.access);
+        this._user.set(response.user);
       })
     );
   }
 
   logout(): void {
-    const refresh = localStorage.getItem(this.REFRESH_KEY);
+    const refresh = localStorage.getItem('refresh_token');
     if (refresh) {
-      this.http.post(`${environment.apiUrl}/auth/logout/`, { refresh }).subscribe();
+      this.http.post(`${API}/auth/logout/`, { refresh }).subscribe();
     }
-    localStorage.removeItem(this.ACCESS_KEY);
-    localStorage.removeItem(this.REFRESH_KEY);
-    this.currentUserSubject.next(null);
-    this.router.navigate(['/auth/login']);
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    this._token.set(null);
+    this._user.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  getToken(): string | null {
+    return this._token();
   }
 
   refreshToken(): Observable<{ access: string }> {
-    const refresh = localStorage.getItem(this.REFRESH_KEY);
-    return this.http
-      .post<{ access: string }>(`${environment.apiUrl}/auth/token/refresh/`, { refresh })
-      .pipe(
-        tap((res) => {
-          localStorage.setItem(this.ACCESS_KEY, res.access);
-        })
-      );
+    const refresh = localStorage.getItem('refresh_token');
+    return this.http.post<{ access: string }>(`${API}/auth/token/refresh/`, { refresh }).pipe(
+      tap(response => {
+        localStorage.setItem('access_token', response.access);
+        this._token.set(response.access);
+      })
+    );
   }
 
-  loadUserProfile(): void {
-    this.http.get<User>(`${environment.apiUrl}/auth/profile/`).subscribe((user) => {
-      const current = this.currentUserSubject.value;
-      // Aktualizuj tylko jeśli dane faktycznie się zmieniły — zapobiega zbędnemu re-renderowi
-      if (
-        !current ||
-        current.id !== user.id ||
-        current.full_name !== user.full_name ||
-        current.role !== user.role ||
-        current.email !== user.email
-      ) {
-        this.currentUserSubject.next(user);
-      }
-    });
-  }
-
-  getAccessToken(): string | null {
-    return localStorage.getItem(this.ACCESS_KEY);
-  }
-
-  getRefreshToken(): string | null {
-    return localStorage.getItem(this.REFRESH_KEY);
-  }
-
-  /** Używaj tylko poza szablonami (guardy, interceptory). W szablonach używaj isLoggedIn$ */
-  isLoggedIn(): boolean {
-    return !!this.currentUserSubject.value;
-  }
-
-  get currentUser(): User | null {
-    return this.currentUserSubject.value;
-  }
-
-  get isAgent(): boolean {
-    return this.currentUser?.role === 'agent' || this.currentUser?.role === 'admin';
-  }
-
-  get isCustomer(): boolean {
-    return this.currentUser?.role === 'customer';
-  }
-
-  private getUserFromToken(): User | null {
-    const token = this.getAccessToken();
-    if (!token) return null;
-    const payload = this.decodeToken(token);
-    if (!payload || payload.exp * 1000 < Date.now()) return null;
-    return {
-      id: payload.user_id,
-      email: payload.email,
-      full_name: payload.full_name,
-      role: payload.role,
-    } as User;
-  }
-
-  private decodeToken(token: string): JwtPayload | null {
-    try {
-      const base64 = token.split('.')[1];
-      const json = atob(base64);
-      return JSON.parse(json) as JwtPayload;
-    } catch {
-      return null;
-    }
+  private loadUser(): User | null {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
   }
 }

@@ -1,217 +1,107 @@
 @use '@angular/material' as mat;
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// Temat Angular Material — niebieski kolor główny jak polisa ubezpieczeniowa
 @include mat.core();
 
-$primary-palette: mat.define-palette(mat.$indigo-palette, 600, 400, 800);
-$accent-palette: mat.define-palette(mat.$cyan-palette, 600);
-$warn-palette: mat.define-palette(mat.$red-palette, 600);
-
-$theme: mat.define-light-theme((
+$theme: mat.define-theme((
   color: (
-    primary: $primary-palette,
-    accent: $accent-palette,
-    warn: $warn-palette,
+    theme-type: dark, // Changed to dark mode
+    primary: mat.$azure-palette,
+    tertiary: mat.$blue-palette,
   ),
-  typography: mat.define-typography-config(
-    $font-family: "'Inter', 'Roboto', sans-serif",
-  ),
-  density: 0,
+  typography: (plain-family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'),
 ));
 
-@include mat.all-component-themes($theme);
-
-/* ── Self-hosted Inter (brak zależności od Google Fonts) ── */
-@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 400; src: url('/assets/fonts/inter-latin-400-normal.woff2') format('woff2'); }
-@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 500; src: url('/assets/fonts/inter-latin-500-normal.woff2') format('woff2'); }
-@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 600; src: url('/assets/fonts/inter-latin-600-normal.woff2') format('woff2'); }
-@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 700; src: url('/assets/fonts/inter-latin-700-normal.woff2') format('woff2'); }
-@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 800; src: url('/assets/fonts/inter-latin-800-normal.woff2') format('woff2'); }
-
-/* Material Icons — ukryj tekst fallback do czasu załadowania czcionki */
-@font-face {
-  font-family: 'Material Icons';
-  font-style: normal;
-  font-display: block;
-  font-weight: 400;
-  src: local('Material Icons'), local('MaterialIcons-Regular'),
-       url('https://fonts.gstatic.com/s/materialicons/v142/flUhRq6tzZclQEJ-Vdg-IuiaDsNc.woff2') format('woff2');
+html {
+  @include mat.all-component-themes($theme);
 }
 
-/* ── CSS Variables ── */
-:root {
-  --primary: #4f46e5;
-  --primary-light: #818cf8;
-  --primary-dark: #3730a3;
-  --accent: #06b6d4;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #f1f5f9;
-  --border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-muted: #94a3b8;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-  --shadow-md: 0 4px 16px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.04);
-  --shadow-lg: 0 10px 40px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06);
-  --shadow-xl: 0 20px 60px rgba(0,0,0,.15);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --transition: all 0.2s cubic-bezier(.4,0,.2,1);
-}
-
-/* ── Reset & Base ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'Inter', 'Roboto', sans-serif;
-  background: var(--surface-2);
-  color: var(--text-primary);
-  line-height: 1.6;
+// FIX: mat-icon z dodatkową klasą CSS (np. class="chevron") traci klasę material-icons
+// i font się nie renderuje. Wymuszamy font globalnie na każdym mat-icon.
+mat-icon, .mat-icon {
+  font-family: 'Material Icons' !important;
+  font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Material overrides ── */
-.mat-mdc-card {
-  border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-md) !important;
-  border: 1px solid var(--border) !important;
-  overflow: hidden;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-.mat-mdc-raised-button {
-  border-radius: var(--radius-sm) !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.01em !important;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #000000;
+  color: #f5f5f7;
+  -webkit-font-smoothing: antialiased;
 }
 
-.mat-mdc-outlined-button {
-  border-radius: var(--radius-sm) !important;
-  font-weight: 600 !important;
-}
-
-.mat-mdc-chip {
-  border-radius: 20px !important;
-  font-weight: 600 !important;
-  font-size: 12px !important;
-}
-
-.mat-mdc-form-field {
-  .mdc-text-field--outlined .mdc-notched-outline__leading,
-  .mdc-text-field--outlined .mdc-notched-outline__trailing,
-  .mdc-text-field--outlined .mdc-notched-outline__notch {
-    border-radius: var(--radius-sm);
-  }
-}
-
-/* ── Utility Classes ── */
-.page-wrapper {
-  max-width: 1280px;
+// Klasy pomocnicze — jak Bootstrap utilities
+.page-container {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 4px;
+  padding: 24px 16px;
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.card {
+  background: #161617;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+  padding: 24px;
+  margin-bottom: 16px;
 }
 
-.glass-card {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.6);
-  box-shadow: var(--shadow-xl) !important;
-}
-
-/* ── Animations ── */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes pulse-ring {
-  0%   { transform: scale(1); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-8px); }
-}
-@keyframes gradient-shift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.animate-fade-up   { animation: fadeInUp .4s ease both; }
-.animate-fade-in   { animation: fadeIn .3s ease both; }
-
-/* ── Skeleton Loader ── */
-.skeleton {
-  background: linear-gradient(90deg, #f0f2f5 25%, #e8eaed 50%, #f0f2f5 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: var(--radius-sm);
-}
-
-/* ── Status Badge ── */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.status-chip {
+  display: inline-block;
   padding: 4px 12px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+
+  &.draft { background: rgba(255, 255, 255, 0.1); color: #86868b; border-color: rgba(255, 255, 255, 0.15); }
+  &.submitted { background: rgba(10, 132, 255, 0.15); color: #66b2ff; border-color: rgba(10, 132, 255, 0.2); }
+  &.under_review { background: rgba(255, 159, 10, 0.15); color: #ffad33; border-color: rgba(255, 159, 10, 0.2); }
+  &.approved { background: rgba(48, 209, 88, 0.15); color: #4ade80; border-color: rgba(48, 209, 88, 0.2); }
+  &.partially_approved { background: rgba(48, 209, 88, 0.1); color: #86efac; border-color: rgba(48, 209, 88, 0.15); }
+  &.rejected { background: rgba(255, 69, 58, 0.15); color: #ff6b6b; border-color: rgba(255, 69, 58, 0.2); }
+  &.paid { background: rgba(48, 209, 88, 0.15); color: #4ade80; border-color: rgba(48, 209, 88, 0.2); }
+  &.closed { background: rgba(255, 255, 255, 0.05); color: #a1a1a6; border-color: rgba(255, 255, 255, 0.1); }
+  &.additional_info { background: rgba(255, 214, 10, 0.15); color: #ffeb3b; border-color: rgba(255, 214, 10, 0.2); }
+
+  // statusy polis
+  &.active { background: rgba(48, 209, 88, 0.15); color: #4ade80; border-color: rgba(48, 209, 88, 0.2); }
+  &.expired { background: rgba(255, 255, 255, 0.05); color: #a1a1a6; border-color: rgba(255, 255, 255, 0.1); }
+  &.cancelled { background: rgba(255, 69, 58, 0.15); color: #ff6b6b; border-color: rgba(255, 69, 58, 0.2); }
+  &.pending { background: rgba(255, 159, 10, 0.15); color: #ffad33; border-color: rgba(255, 159, 10, 0.2); }
 }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-
-/* ── Table ── */
-.mat-mdc-table { border-radius: var(--radius-lg) !important; overflow: hidden; }
-.mat-mdc-header-cell { font-weight: 700 !important; color: var(--text-secondary) !important;
-  font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.05em; }
-.mat-mdc-row { transition: var(--transition); }
-.mat-mdc-row:hover { background: var(--surface-3) !important; }
-
-/* ── Snackbar ── */
-.mat-mdc-snack-bar-container {
-  --mdc-snackbar-container-shape: var(--radius-sm);
-}
-
-/* ── Page Header ── */
-.page-header-block {
-  margin-bottom: 28px;
-}
-.page-header-block h1 {
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-}
-.page-header-block .subtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
+.error-message {
+  color: #ff453a;
+  font-size: 0.85rem;
   margin-top: 4px;
+}
+
+// Landing page animations (global — muszą być globalne bo klasa 'visible' jest dodawana przez JS)
+.fade-in {
+  opacity: 0;
+  transform: translateY(40px);
+  filter: blur(4px);
+  transition: opacity 0.8s cubic-bezier(0.25, 0.1, 0.25, 1),
+              transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1),
+              filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+.feature-spotlight {
+  background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.03), transparent 50%);
 }

@@ -1,538 +1,248 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit, AfterViewInit, ElementRef, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { ReactiveFormsModule, FormControl } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { gsap } from 'gsap';
 import { PolicyService } from '../../../core/services/policy.service';
+import { Policy } from '../../../core/models/policy.model';
 import { AuthService } from '../../../core/services/auth.service';
-import { Policy, CATEGORY_ICONS, CATEGORY_COLORS } from '../../../shared/models/policy.model';
 
 @Component({
   selector: 'app-policy-detail',
   standalone: true,
   imports: [
-    CommonModule, RouterLink, ReactiveFormsModule,
-    MatIconModule, MatProgressSpinnerModule, MatSnackBarModule,
+    CommonModule, RouterLink,
   ],
   template: `
-    <div class="page-wrapper animate-fade-up" *ngIf="policy; else loadingTpl">
-
-      <!-- Back -->
-      <a class="back-link" routerLink="/policies">
-        <mat-icon>arrow_back</mat-icon>
-        <span>Powrót do polis</span>
-      </a>
-
-      <!-- Hero banner -->
-      <div class="hero-banner" [style.background]="getCategoryGradient()">
-        <div class="hero-left">
-          <div class="hero-icon-wrap">
-            <mat-icon class="hero-icon">{{ getCategoryIcon() }}</mat-icon>
-          </div>
-          <div>
-            <div class="hero-num">{{ policy.policy_number }}</div>
-            <h1 class="hero-title">{{ policy.product?.name }}</h1>
-            <div class="hero-dates">
-              <mat-icon>calendar_today</mat-icon>
-              {{ policy.start_date | date:'d MMM y' }} — {{ policy.end_date | date:'d MMM y' }}
-            </div>
-          </div>
-        </div>
-        <div class="hero-status" [style.background]="getStatusBg()">
-          {{ policy.status_display }}
-        </div>
+    <div class="max-w-[1000px] mx-auto px-4 md:px-8 py-8 md:py-12">
+      <div class="gsap-element mb-8">
+        <a routerLink="/policies" class="inline-flex items-center text-sm font-medium text-gray-400 hover:text-white transition-colors group">
+          <span class="material-icons text-[18px] mr-1 group-hover:-translate-x-1 transition-transform">arrow_back</span>
+          Wróć do listy polis
+        </a>
       </div>
 
-      <!-- Layout -->
-      <div class="detail-grid">
-
-        <!-- Main column -->
-        <div class="main-col">
-
-          <!-- KPI cards -->
-          <div class="kpi-row">
-            <div class="kpi-card">
-              <div class="kpi-label">Suma ubezpieczenia</div>
-              <div class="kpi-value indigo">
-                {{ policy.coverage_amount | currency:'PLN':'symbol':'1.0-0':'pl' }}
+      @if (loading) {
+        <div class="flex justify-center items-center py-20">
+          <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      } @else if (policy) {
+        <!-- Nagłówek polisy -->
+        <div class="gsap-element bg-[#161617] border border-white/5 rounded-3xl p-6 md:p-8 mb-6 shadow-2xl relative overflow-hidden">
+          <div class="absolute right-0 top-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+          
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div class="flex items-center gap-6">
+              <div class="w-16 h-16 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                <span class="material-icons text-3xl">{{ getProductIcon(policy.product?.category || '') }}</span>
+              </div>
+              <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-white tracking-tight">{{ policy.product?.name || 'Nieznany produkt' }}</h1>
+                <p class="text-gray-400 font-mono mt-1">{{ policy.policy_number }}</p>
               </div>
             </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Składka miesięczna</div>
-              <div class="kpi-value teal">
-                {{ policy.premium_monthly | currency:'PLN':'symbol':'1.2-2':'pl' }}
-              </div>
-            </div>
-            <div class="kpi-card" *ngIf="policy.days_to_expiry !== null">
-              <div class="kpi-label">Dni do wygaśnięcia</div>
-              <div class="kpi-value" [class.amber]="(policy.days_to_expiry ?? 999) <= 30"
-                   [class.indigo]="(policy.days_to_expiry ?? 999) > 30">
-                {{ policy.days_to_expiry }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Expiry bar -->
-          <div class="section-card" *ngIf="policy.status === 'active' && policy.days_to_expiry !== null">
-            <div class="expiry-header">
-              <span class="section-label">
-                <mat-icon>schedule</mat-icon> Czas obowiązywania
+            
+            <div>
+              <span id="status-badge" [class]="'px-4 py-1.5 inline-block rounded-full text-sm font-medium border ' + getStatusClasses(policy.status)">
+                {{ getStatusLabel(policy.status) }}
               </span>
-              <span class="expiry-badge" [class.warn]="(policy.days_to_expiry ?? 999) <= 30">
-                {{ policy.days_to_expiry }} dni
-              </span>
-            </div>
-            <div class="expiry-track">
-              <div class="expiry-fill"
-                   [style.width]="getExpiryProgress() + '%'"
-                   [class.warn]="(policy.days_to_expiry ?? 999) <= 30"></div>
-            </div>
-            <div class="expiry-foot">
-              <span>Wygasa: {{ policy.end_date | date:'d MMMM y' }}</span>
-            </div>
-          </div>
-
-          <!-- Coverage -->
-          <div class="section-card" *ngIf="getCoverageItems().length > 0">
-            <div class="section-title-row">
-              <mat-icon>verified_user</mat-icon>
-              <span>Zakres ochrony</span>
-            </div>
-            <div class="coverage-grid">
-              <div *ngFor="let item of getCoverageItems()" class="coverage-item"
-                   [class.covered]="item.value" [class.uncovered]="!item.value">
-                <mat-icon>{{ item.value ? 'check_circle' : 'cancel' }}</mat-icon>
-                <span>{{ item.key }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Insured object -->
-          <div class="section-card" *ngIf="hasInsuredObject()">
-            <div class="section-title-row">
-              <mat-icon>info</mat-icon>
-              <span>Ubezpieczony obiekt</span>
-            </div>
-            <div class="info-grid">
-              <div *ngFor="let item of getInsuredObjectItems()" class="info-row">
-                <span class="info-key">{{ item.key }}</span>
-                <span class="info-val">{{ item.value }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Notes -->
-          <div class="section-card" *ngIf="policy.notes">
-            <div class="section-title-row">
-              <mat-icon>note</mat-icon>
-              <span>Uwagi</span>
-            </div>
-            <p class="notes-text">{{ policy.notes }}</p>
-          </div>
-
-          <!-- Documents -->
-          <div class="section-card">
-            <div class="section-title-row">
-              <mat-icon>folder</mat-icon>
-              <span>Dokumenty polisy</span>
-            </div>
-            <div *ngIf="!policy.documents?.length" class="empty-docs">
-              <mat-icon>folder_open</mat-icon>
-              <p>Brak dokumentów</p>
-            </div>
-            <div *ngFor="let doc of policy.documents" class="doc-row">
-              <div class="doc-icon"><mat-icon>picture_as_pdf</mat-icon></div>
-              <div class="doc-info">
-                <div class="doc-title">{{ doc.title }}</div>
-                <div class="doc-meta">{{ doc.document_type_display }} · {{ doc.uploaded_at | date:'d MMM y' }}</div>
-              </div>
-              <a class="doc-dl" [href]="doc.file" target="_blank">
-                <mat-icon>download</mat-icon>
-              </a>
             </div>
           </div>
         </div>
 
-        <!-- Sidebar -->
-        <div class="sidebar-col">
-
-          <!-- Policy info -->
-          <div class="section-card">
-            <div class="section-title-row">
-              <mat-icon>badge</mat-icon>
-              <span>Informacje</span>
-            </div>
-            <div class="info-list">
-              <div class="info-row">
-                <span class="info-key">Kategoria</span>
-                <span class="info-val">{{ policy.product?.category_display }}</span>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <!-- Szczegóły -->
+          <div class="gsap-element bg-[#161617] border border-white/5 rounded-3xl p-6 shadow-2xl">
+            <h3 class="text-lg font-semibold text-white mb-4">Szczegóły polisy</h3>
+            <div class="space-y-4">
+              <div class="flex justify-between items-center py-3 border-b border-white/5">
+                <span class="text-gray-400 text-sm">Data rozpoczęcia</span>
+                <span class="text-white font-medium">{{ policy.start_date | date:'dd.MM.yyyy' }}</span>
               </div>
-              <div class="info-row" *ngIf="policy.assigned_agent">
-                <span class="info-key">Opiekun</span>
-                <span class="info-val">{{ policy.assigned_agent?.full_name }}</span>
+              <div class="flex justify-between items-center py-3 border-b border-white/5">
+                <span class="text-gray-400 text-sm">Data zakończenia</span>
+                <span class="text-white font-medium">{{ policy.end_date | date:'dd.MM.yyyy' }}</span>
               </div>
-            </div>
-          </div>
-
-          <!-- Agent: change status -->
-          <div class="section-card" *ngIf="auth.isAgent">
-            <div class="section-title-row">
-              <mat-icon>manage_accounts</mat-icon>
-              <span>Zarządzanie polisą</span>
-            </div>
-            <div class="field-group">
-              <label class="field-label">Zmień status</label>
-              <div class="select-wrap">
-                <mat-icon class="select-icon">swap_horiz</mat-icon>
-                <select [formControl]="newStatusCtrl" class="custom-select">
-                  <option value="">— Wybierz status —</option>
-                  <option value="pending">Oczekująca</option>
-                  <option value="active">Aktywna</option>
-                  <option value="suspended">Zawieszona</option>
-                  <option value="cancelled">Anulowana</option>
-                  <option value="expired">Wygasła</option>
-                </select>
-                <mat-icon class="select-arrow">expand_more</mat-icon>
+              <div class="flex justify-between items-center py-3 border-b border-white/5">
+                <span class="text-gray-400 text-sm">Składka roczna</span>
+                <span class="text-white font-medium">{{ policy.premium_amount }} zł</span>
               </div>
-            </div>
-            <button class="btn-change" (click)="changeStatus()"
-                    [disabled]="!newStatusCtrl.value || statusLoading">
-              <mat-spinner *ngIf="statusLoading" diameter="16"></mat-spinner>
-              <mat-icon *ngIf="!statusLoading">save</mat-icon>
-              <span>Zmień status</span>
-            </button>
-          </div>
-
-          <!-- Agent: customer info -->
-          <div class="section-card" *ngIf="auth.isAgent && policy.customer">
-            <div class="section-title-row">
-              <mat-icon>person</mat-icon>
-              <span>Klient</span>
-            </div>
-            <div class="info-list">
-              <div class="info-row">
-                <span class="info-key">Imię i nazwisko</span>
-                <span class="info-val">{{ policy.customer?.full_name }}</span>
+              <div class="flex justify-between items-center py-3 border-b border-white/5">
+                <span class="text-gray-400 text-sm">Suma ubezpieczenia</span>
+                <span class="text-white font-medium">{{ policy.coverage_amount }} zł</span>
               </div>
-              <div class="info-row">
-                <span class="info-key">Email</span>
-                <span class="info-val">{{ policy.customer?.email }}</span>
+              <div class="flex justify-between items-center py-3">
+                <span class="text-gray-400 text-sm">Kategoria</span>
+                <span class="text-gray-300">{{ getCategoryLabel(policy.product?.category || '') }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Customer: report claim -->
-          <div class="section-card cta-card" *ngIf="policy.status === 'active' && !auth.isAgent">
-            <div class="cta-icon">
-              <mat-icon>report_problem</mat-icon>
-            </div>
-            <strong>Masz szkodę?</strong>
-            <p>Zgłoś zdarzenie do tej polisy szybko i wygodnie.</p>
-            <a class="btn-claim" [routerLink]="['/claims/new']"
-               [queryParams]="{ policyId: policy.id }">
-              <mat-icon>add</mat-icon> Zgłoś szkodę
-            </a>
+          <!-- Informacje o produkcie -->
+          <div class="gsap-element bg-[#161617] border border-white/5 rounded-3xl p-6 shadow-2xl">
+            <h3 class="text-lg font-semibold text-white mb-4">Informacje o produkcie</h3>
+            <p class="text-gray-400 leading-relaxed text-sm md:text-base">
+              {{ policy.product?.description || 'Brak opisu.' }}
+            </p>
           </div>
-
         </div>
-      </div>
+
+        @if (auth.isAgent()) {
+          <!-- Panel Agenta -->
+          <div class="gsap-element bg-gradient-to-br from-blue-900/10 to-purple-900/5 border border-blue-500/20 rounded-3xl p-6 shadow-2xl mb-8 relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl"></div>
+            <h3 class="text-lg font-bold text-blue-400 mb-4 flex items-center gap-2 relative z-10">
+              <span class="material-icons">admin_panel_settings</span>
+              Panel Agenta: Zarządzanie statusem
+            </h3>
+            <div class="flex flex-wrap gap-3 relative z-10">
+              <button 
+                [disabled]="isUpdating || policy.status === 'active'"
+                (click)="updateStatus('active')"
+                class="px-5 py-2.5 rounded-full text-sm font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:-translate-y-0">
+                Aktywuj
+              </button>
+              <button 
+                [disabled]="isUpdating || policy.status === 'pending'"
+                (click)="updateStatus('pending')"
+                class="px-5 py-2.5 rounded-full text-sm font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:-translate-y-0">
+                Oczekująca
+              </button>
+              <button 
+                [disabled]="isUpdating || policy.status === 'expired'"
+                (click)="updateStatus('expired')"
+                class="px-5 py-2.5 rounded-full text-sm font-medium bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:-translate-y-0">
+                Oznacz jako Wygaśniętą
+              </button>
+              <button 
+                [disabled]="isUpdating || policy.status === 'cancelled'"
+                (click)="updateStatus('cancelled')"
+                class="px-5 py-2.5 rounded-full text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:-translate-y-0">
+                Anuluj
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Akcje -->
+        <div class="gsap-element flex flex-col sm:flex-row gap-4">
+          <a routerLink="/claims/new" class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-medium transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] flex-1 sm:flex-none">
+            <span class="material-icons text-[20px]">add</span>
+            Zgłoś szkodę z tej polisy
+          </a>
+          <a routerLink="/claims" [queryParams]="{policy: policy.id}" class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-transparent border border-white/20 hover:bg-white/5 text-white font-medium transition-colors flex-1 sm:flex-none">
+            <span class="material-icons text-[20px]">list</span>
+            Historia szkód
+          </a>
+        </div>
+      } @else {
+        <div class="gsap-element bg-[#161617] border border-white/5 rounded-3xl p-16 text-center shadow-2xl max-w-lg mx-auto mt-10">
+          <div class="w-20 h-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center mb-6 text-red-500">
+            <span class="material-icons text-4xl">error_outline</span>
+          </div>
+          <h3 class="text-xl font-semibold text-white mb-2">Polisa nie została znaleziona</h3>
+          <p class="text-gray-400 mb-8">Polisa o podanym identyfikatorze nie istnieje lub nie masz do niej dostępu.</p>
+          <a routerLink="/policies" class="inline-flex items-center justify-center px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-colors">
+            Wróć do listy
+          </a>
+        </div>
+      }
     </div>
-
-    <ng-template #loadingTpl>
-      <div class="loading-page">
-        <mat-spinner diameter="48"></mat-spinner>
-      </div>
-    </ng-template>
-  `,
-  styles: [`
-    .page-wrapper { max-width: 1200px; margin: 0 auto; }
-
-    .back-link {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 13px; color: var(--text-muted); text-decoration: none;
-      margin-bottom: 16px; transition: color .15s;
-    }
-    .back-link:hover { color: #4f46e5; }
-    .back-link mat-icon { font-size: 18px; width: 18px; height: 18px; }
-
-    /* Hero */
-    .hero-banner {
-      border-radius: 18px; padding: 28px 32px;
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 24px; gap: 16px;
-    }
-    .hero-left { display: flex; align-items: center; gap: 20px; }
-    .hero-icon-wrap {
-      width: 64px; height: 64px; border-radius: 16px;
-      background: rgba(255,255,255,.2);
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .hero-icon { font-size: 36px; width: 36px; height: 36px; color: white; }
-    .hero-num { font-size: 12px; color: rgba(255,255,255,.65); font-weight: 600; margin-bottom: 4px; }
-    .hero-title { font-size: 22px; font-weight: 800; color: white; margin: 0 0 8px; }
-    .hero-dates {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 13px; color: rgba(255,255,255,.75);
-    }
-    .hero-dates mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .hero-status {
-      font-size: 12px; font-weight: 700; padding: 6px 16px; border-radius: 20px;
-      color: white; white-space: nowrap; flex-shrink: 0;
-    }
-
-    /* Layout */
-    .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
-
-    /* Section card */
-    .section-card {
-      background: white; border-radius: 14px; padding: 20px;
-      border: 1px solid var(--border); box-shadow: var(--shadow-sm);
-      margin-bottom: 16px;
-    }
-    .section-card:last-child { margin-bottom: 0; }
-    .section-title-row {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 700; color: var(--text-secondary);
-      text-transform: uppercase; letter-spacing: .05em;
-      margin-bottom: 16px;
-    }
-    .section-title-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: #4f46e5; }
-
-    /* KPI */
-    .kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
-    .kpi-card {
-      background: white; border-radius: 12px; padding: 16px;
-      border: 1px solid var(--border); box-shadow: var(--shadow-sm);
-    }
-    .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; }
-    .kpi-value { font-size: 20px; font-weight: 800; }
-    .kpi-value.indigo { color: #4f46e5; }
-    .kpi-value.teal { color: #0e7490; }
-    .kpi-value.amber { color: #d97706; }
-
-    /* Expiry bar */
-    .expiry-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .section-label {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 12px; font-weight: 700; color: var(--text-secondary);
-      text-transform: uppercase; letter-spacing: .05em;
-    }
-    .section-label mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .expiry-badge {
-      font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 20px;
-      background: rgba(79,70,229,.1); color: #4f46e5;
-    }
-    .expiry-badge.warn { background: rgba(245,158,11,.1); color: #d97706; }
-    .expiry-track { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
-    .expiry-fill { height: 100%; background: linear-gradient(90deg,#4f46e5,#06b6d4); border-radius: 99px; transition: width .3s; }
-    .expiry-fill.warn { background: linear-gradient(90deg,#f59e0b,#ef4444); }
-    .expiry-foot { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
-
-    /* Coverage */
-    .coverage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .coverage-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; }
-    .coverage-item mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .covered mat-icon { color: #10b981; }
-    .uncovered { color: var(--text-muted); }
-    .uncovered mat-icon { color: #cbd5e1; }
-
-    /* Info grid */
-    .info-grid { display: flex; flex-direction: column; gap: 0; }
-    .info-list { display: flex; flex-direction: column; gap: 0; }
-    .info-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 0; border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
-    .info-row:last-child { border-bottom: none; }
-    .info-key { color: var(--text-muted); font-size: 12px; }
-    .info-val { font-weight: 600; }
-
-    /* Notes */
-    .notes-text { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin: 0; }
-
-    /* Documents */
-    .empty-docs { text-align: center; padding: 24px; color: var(--text-muted); }
-    .empty-docs mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .25; display: block; margin: 0 auto 8px; }
-    .doc-row {
-      display: flex; align-items: center; gap: 12px; padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .doc-row:last-child { border-bottom: none; }
-    .doc-icon {
-      width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
-      background: rgba(239,68,68,.1); display: flex; align-items: center; justify-content: center;
-    }
-    .doc-icon mat-icon { color: #ef4444; font-size: 20px; }
-    .doc-info { flex: 1; }
-    .doc-title { font-size: 13px; font-weight: 600; }
-    .doc-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .doc-dl {
-      width: 32px; height: 32px; border-radius: 8px;
-      background: var(--surface-3); display: flex; align-items: center; justify-content: center;
-      color: var(--text-muted); text-decoration: none; transition: all .15s;
-    }
-    .doc-dl:hover { background: #4f46e5; color: white; }
-    .doc-dl mat-icon { font-size: 18px; }
-
-    /* Sidebar: select */
-    .field-group { margin-bottom: 12px; }
-    .field-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px; }
-    .select-wrap {
-      display: flex; align-items: center;
-      border: 1.5px solid var(--border); border-radius: 10px;
-      background: var(--surface-2); overflow: hidden;
-      transition: border-color .2s;
-    }
-    .select-wrap:focus-within { border-color: #4f46e5; background: white; }
-    .select-icon { color: var(--text-muted); margin: 0 8px; font-size: 16px; flex-shrink: 0; }
-    .select-arrow { color: var(--text-muted); margin: 0 8px; font-size: 16px; flex-shrink: 0; pointer-events: none; }
-    .custom-select {
-      flex: 1; border: none; background: none; padding: 10px 4px;
-      font-size: 13px; color: var(--text-primary); outline: none;
-      font-family: inherit; cursor: pointer; appearance: none;
-    }
-    .btn-change {
-      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
-      background: linear-gradient(135deg,#4f46e5,#06b6d4); color: white;
-      border: none; border-radius: 10px; padding: 10px;
-      font-size: 13px; font-weight: 700; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(79,70,229,.25); transition: all .2s;
-    }
-    .btn-change:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(79,70,229,.35); }
-    .btn-change:disabled { opacity: .5; cursor: not-allowed; }
-    .btn-change mat-icon { font-size: 16px; }
-
-    /* CTA card */
-    .cta-card { text-align: center; }
-    .cta-icon {
-      width: 52px; height: 52px; border-radius: 14px;
-      background: rgba(239,68,68,.1); display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 12px;
-    }
-    .cta-icon mat-icon { color: #ef4444; font-size: 28px; }
-    .cta-card strong { font-size: 15px; display: block; margin-bottom: 6px; }
-    .cta-card p { font-size: 12px; color: var(--text-muted); margin: 0 0 14px; }
-    .btn-claim {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: linear-gradient(135deg,#b91c1c,#ef4444); color: white;
-      text-decoration: none; border-radius: 10px; padding: 10px 18px;
-      font-size: 13px; font-weight: 700;
-      box-shadow: 0 4px 12px rgba(239,68,68,.3); transition: all .2s;
-    }
-    .btn-claim:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(239,68,68,.4); }
-    .btn-claim mat-icon { font-size: 16px; }
-
-    .loading-page { display: flex; justify-content: center; padding: 100px; }
-
-    @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
-    @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr 1fr; } }
-  `],
+  `
 })
-export class PolicyDetailComponent implements OnInit {
-  policy: Policy | null = null;
-  newStatusCtrl = new FormControl('');
-  statusLoading = false;
+export class PolicyDetailComponent implements OnInit, AfterViewInit {
+  id = input.required<string>();
 
-  constructor(
-    private route: ActivatedRoute,
-    private policyService: PolicyService,
-    public auth: AuthService,
-    private snackBar: MatSnackBar
-  ) {}
+  private policyService = inject(PolicyService);
+  auth = inject(AuthService);
+  private el = inject(ElementRef);
+
+  loading = true;
+  isUpdating = false;
+  policy: Policy | null = null;
 
   ngOnInit(): void {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
-    this.policyService.getPolicy(id).subscribe((policy) => {
-      this.policy = policy;
-    });
-  }
-
-  getCategoryIcon(): string {
-    const cat = (this.policy?.product as any)?.category || '';
-    return (CATEGORY_ICONS as any)[cat] || 'policy';
-  }
-
-  getCategoryGradient(): string {
-    const gradients: Record<string, string> = {
-      auto: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
-      property: 'linear-gradient(135deg,#047857,#10b981)',
-      health: 'linear-gradient(135deg,#b91c1c,#ef4444)',
-      life: 'linear-gradient(135deg,#6d28d9,#a855f7)',
-      travel: 'linear-gradient(135deg,#0e7490,#06b6d4)',
-      liability: 'linear-gradient(135deg,#c2410c,#f97316)',
-    };
-    const cat = (this.policy?.product as any)?.category || '';
-    return gradients[cat] || 'linear-gradient(135deg,#4f46e5,#06b6d4)';
-  }
-
-  getStatusBg(): string {
-    const colors: Record<string, string> = {
-      active: 'rgba(16,185,129,.3)', pending: 'rgba(99,102,241,.3)',
-      expired: 'rgba(100,116,139,.3)', cancelled: 'rgba(239,68,68,.3)',
-      suspended: 'rgba(245,158,11,.3)',
-    };
-    return colors[this.policy?.status || ''] || 'rgba(0,0,0,.2)';
-  }
-
-  getCoverageItems(): { key: string; value: boolean }[] {
-    const details = (this.policy?.product as any)?.coverage_details || {};
-    return Object.entries(details).map(([key, value]) => ({
-      key: this.formatCoverageKey(key),
-      value: Boolean(value),
-    }));
-  }
-
-  formatCoverageKey(key: string): string {
-    const labels: Record<string, string> = {
-      theft: 'Kradzież', accident: 'Wypadek', fire: 'Pożar', flood: 'Powódź',
-      vandalism: 'Wandalizm', natural_disasters: 'Klęski żywiołowe',
-      glass_breakage: 'Stłuczenie szyb', replacement_vehicle: 'Pojazd zastępczy',
-      bodily_injury: 'Ochrona ciała', property_damage: 'Szkody majątkowe',
-      eu_coverage: 'Ochrona EU', assistance_24h: 'Assistance 24/7',
-      gp_visits: 'Wizyty u lekarza', specialists: 'Specjaliści',
-      diagnostics: 'Diagnostyka', rehabilitation: 'Rehabilitacja',
-      dental: 'Stomatologia', mental_health: 'Zdrowie psychiczne',
-      hospitalization: 'Hospitalizacja', death: 'Śmierć',
-      permanent_disability: 'Trwała inwalidztwo', critical_illness: 'Ciężka choroba',
-      savings_component: 'Składnik oszczędnościowy', medical_costs: 'Koszty leczenia',
-      evacuation: 'Ewakuacja', baggage: 'Bagaż',
-      trip_cancellation: 'Rezygnacja z podróży', flight_delay: 'Opóźnienie lotu',
-      personal_accident: 'NNW', third_party_liability: 'OC',
-      temporary_accommodation: 'Zakwaterowanie zastępcze',
-    };
-    return labels[key] || key;
-  }
-
-  hasInsuredObject(): boolean {
-    return Object.keys(this.policy?.insured_object || {}).length > 0;
-  }
-
-  getInsuredObjectItems(): { key: string; value: string }[] {
-    return Object.entries(this.policy?.insured_object || {}).map(([key, value]) => ({
-      key,
-      value: String(value),
-    }));
-  }
-
-  getExpiryProgress(): number {
-    if (!this.policy?.days_to_expiry) return 0;
-    return Math.max(0, Math.min(100, (this.policy.days_to_expiry / 365) * 100));
-  }
-
-  changeStatus(): void {
-    if (!this.policy || !this.newStatusCtrl.value) return;
-    this.statusLoading = true;
-    this.policyService.updatePolicyStatus(this.policy.id, this.newStatusCtrl.value).subscribe({
-      next: (updated) => {
-        this.policy = updated;
-        this.newStatusCtrl.reset();
-        this.statusLoading = false;
-        this.snackBar.open('Status polisy zmieniony.', 'OK', { duration: 3000 });
+    this.policyService.getPolicy(Number(this.id())).subscribe({
+      next: data => { 
+        this.policy = data; 
+        this.loading = false; 
+        setTimeout(() => this.animateElements(), 50);
       },
-      error: () => { this.statusLoading = false; },
+      error: () => { this.loading = false; }
     });
+  }
+
+  ngAfterViewInit() {
+    // initial fall-back if loading is fast
+    this.animateElements();
+  }
+
+  animateElements() {
+    const elements = this.el.nativeElement.querySelectorAll('.gsap-element');
+    if (elements.length > 0) {
+      gsap.fromTo(elements, 
+        { y: 30, opacity: 0 }, 
+        { y: 0, opacity: 1, duration: 0.6, stagger: 0.1, ease: 'power3.out', overwrite: true }
+      );
+    }
+  }
+
+  updateStatus(newStatus: string): void {
+    if (!this.policy || this.isUpdating) return;
+    this.isUpdating = true;
+    
+    // Smooth transition UI
+    const targetEl = document.getElementById('status-badge');
+    if (targetEl) {
+      gsap.to(targetEl, { scale: 1.1, duration: 0.15, yoyo: true, repeat: 1 });
+    }
+
+    this.policyService.updatePolicyStatus(this.policy.id, newStatus).subscribe({
+      next: (updatedPolicy) => {
+        this.policy = updatedPolicy;
+        this.isUpdating = false;
+        
+        // Success animation
+        if (targetEl) {
+          gsap.fromTo(targetEl, { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.4, ease: 'back.out(1.5)' });
+        }
+      },
+      error: () => {
+        this.isUpdating = false;
+        alert('Wystąpił błąd podczas zmiany statusu polis.');
+      }
+    });
+  }
+
+  getProductIcon(category: string): string {
+    const icons: Record<string, string> = {
+      auto: 'directions_car', property: 'home', health: 'favorite',
+      life: 'person', travel: 'flight', liability: 'gavel',
+    };
+    return icons[category] || 'shield';
+  }
+
+  getStatusClasses(status: string): string {
+    const classes: Record<string, string> = {
+      active: 'bg-green-500/10 text-green-400 border-green-500/20',
+      expired: 'bg-white/5 text-gray-400 border-white/10',
+      cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
+      pending: 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+    };
+    return classes[status] || classes['expired'];
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      active: 'Aktywna', expired: 'Wygasła', cancelled: 'Anulowana', pending: 'Oczekująca'
+    };
+    return labels[status] || status;
+  }
+
+  getCategoryLabel(category: string): string {
+    const labels: Record<string, string> = {
+      auto: 'Komunikacyjne', property: 'Nieruchomości', health: 'Zdrowotne',
+      life: 'Na życie', travel: 'Podróżne', liability: 'OC'
+    };
+    return labels[category] || category;
   }
 }

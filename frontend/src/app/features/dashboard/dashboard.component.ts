@@ -1,585 +1,312 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatListModule } from '@angular/material/list';
-import { MatDividerModule } from '@angular/material/divider';
-import { NgChartsModule } from 'ng2-charts';
-import { ChartData, ChartOptions } from 'chart.js';
-import { Chart, ArcElement, Tooltip, Legend, DoughnutController,
-         BarElement, BarController, CategoryScale, LinearScale } from 'chart.js';
 import { forkJoin } from 'rxjs';
+import { gsap } from 'gsap';
 import { AuthService } from '../../core/services/auth.service';
 import { PolicyService } from '../../core/services/policy.service';
 import { ClaimService } from '../../core/services/claim.service';
-import { NotificationService, Notification } from '../../core/services/notification.service';
-import { Policy } from '../../shared/models/policy.model';
-import { Claim, STATUS_CONFIG, ClaimStatus } from '../../shared/models/claim.model';
-
-Chart.register(ArcElement, Tooltip, Legend, DoughnutController,
-               BarElement, BarController, CategoryScale, LinearScale);
+import { Policy } from '../../core/models/policy.model';
+import { Claim, CLAIM_STATUS_LABELS } from '../../core/models/claim.model';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CommonModule, RouterLink, NgChartsModule,
-    MatCardModule, MatButtonModule, MatIconModule, MatListModule, MatDividerModule,
+    CommonModule, RouterLink,
   ],
   template: `
-    <div class="dash page-wrapper animate-fade-up">
+    <div class="max-w-[1200px] mx-auto px-4 md:px-8 py-8 md:py-12 relative">
+      <!-- Background Ambient Glow -->
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[radial-gradient(ellipse,rgba(10,132,255,0.08),transparent_60%)] pointer-events-none -z-10 blur-3xl"></div>
 
       <!-- Header -->
-      <div class="dash-header">
+      <div class="gsap-element flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
         <div>
-          <h1>Dzień dobry, <span class="gradient-text">{{ getFirstName() }}</span> 👋</h1>
-          <p class="subtitle">{{ today | date:'EEEE, d MMMM y':'':'pl' }}</p>
+          <h1 class="text-3xl md:text-5xl font-bold text-white tracking-tight mb-3">
+            Witaj, <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">{{ auth.user()?.first_name || auth.user()?.username }}</span>! <span class="inline-block origin-bottom-right rotate-12 animate-pulse">👋</span>
+          </h1>
+          <p class="text-gray-400 text-lg md:text-xl font-light">{{ getWelcomeMessage() }}</p>
         </div>
-        <a mat-raised-button class="btn-new-claim" routerLink="/claims/new" *ngIf="!auth.isAgent">
-          <mat-icon>add</mat-icon> Nowe zgłoszenie szkody
-        </a>
+        @if (auth.isCustomer()) {
+          <a routerLink="/claims/new" class="group relative inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold transition-all shadow-[0_10px_30px_rgba(37,99,235,0.4)] hover:shadow-[0_15px_40px_rgba(37,99,235,0.6)] hover:-translate-y-1 overflow-hidden">
+            <!-- inner flare -->
+            <div class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 relative z-10 transition-transform group-hover:rotate-90">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span class="relative z-10">Zgłoś szkodę</span>
+          </a>
+        }
       </div>
 
-      <!-- KPI Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card kpi-indigo" routerLink="/policies">
-          <div class="kpi-icon"><mat-icon>policy</mat-icon></div>
-          <div class="kpi-body">
-            <div class="kpi-value">{{ activePoliciesCount }}</div>
-            <div class="kpi-label">Aktywne polisy</div>
-          </div>
-          <div class="kpi-arrow">→</div>
-        </div>
-
-        <div class="kpi-card kpi-cyan" routerLink="/claims">
-          <div class="kpi-icon"><mat-icon>report_problem</mat-icon></div>
-          <div class="kpi-body">
-            <div class="kpi-value">{{ openClaimsCount }}</div>
-            <div class="kpi-label">Otwarte szkody</div>
-          </div>
-          <div class="kpi-arrow">→</div>
-        </div>
-
-        <div class="kpi-card kpi-emerald">
-          <div class="kpi-icon"><mat-icon>payments</mat-icon></div>
-          <div class="kpi-body">
-            <div class="kpi-value kpi-amount">{{ totalPaidAmount | currency:'PLN':'symbol':'1.0-0':'pl' }}</div>
-            <div class="kpi-label">Wypłacono łącznie</div>
-          </div>
-          <div class="kpi-trend up"><mat-icon>trending_up</mat-icon></div>
-        </div>
-
-        <div class="kpi-card kpi-amber" routerLink="/agent/queue" *ngIf="auth.isAgent">
-          <div class="kpi-icon"><mat-icon>inbox</mat-icon></div>
-          <div class="kpi-body">
-            <div class="kpi-value">{{ pendingClaimsCount }}</div>
-            <div class="kpi-label">Do rozpatrzenia</div>
-          </div>
-          <div class="kpi-pulse" *ngIf="pendingClaimsCount > 0"></div>
-        </div>
-
-        <div class="kpi-card kpi-purple" *ngIf="!auth.isAgent">
-          <div class="kpi-icon"><mat-icon>verified_user</mat-icon></div>
-          <div class="kpi-body">
-            <div class="kpi-value">{{ totalPoliciesCount }}</div>
-            <div class="kpi-label">Wszystkie polisy</div>
+      @if (loading) {
+        <div class="flex justify-center items-center py-32">
+          <div class="relative w-16 h-16">
+            <div class="absolute inset-0 border-4 border-white/10 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
           </div>
         </div>
-      </div>
-
-      <!-- Main grid -->
-      <div class="main-grid">
-
-        <!-- Doughnut chart: statusy szkód -->
-        <div class="chart-card glass-card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Status szkód</div>
-              <div class="card-subtitle">Rozkład wszystkich zgłoszeń</div>
+      } @else {
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          
+          <div class="gsap-element bg-gradient-to-b from-[#1c1c1e] to-[#121214] border border-white/10 rounded-3xl p-6 md:p-8 shadow-[0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+            <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-colors"></div>
+            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(59,130,246,0.15)] group-hover:scale-110 transition-transform">
+              <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
             </div>
+            <div class="text-sm tracking-wide text-gray-400 font-medium uppercase mb-1">Aktywne polisy</div>
+            <div class="text-4xl md:text-5xl font-black text-white tracking-tight">{{ stats.activePolicies }}</div>
           </div>
-          <div class="chart-wrap" *ngIf="doughnutData.datasets[0].data.length > 0">
-            <canvas baseChart
-              [data]="doughnutData"
-              [options]="doughnutOptions"
-              type="doughnut">
-            </canvas>
-            <div class="chart-center-label">
-              <div class="center-value">{{ totalClaimsCount }}</div>
-              <div class="center-text">Łącznie</div>
-            </div>
-          </div>
-          <div class="empty-chart" *ngIf="!totalClaimsCount">
-            <mat-icon>pie_chart</mat-icon>
-            <span>Brak danych</span>
-          </div>
-          <div class="legend-list">
-            <div *ngFor="let item of claimStatusLegend" class="legend-item">
-              <span class="legend-dot" [style.background]="item.color"></span>
-              <span class="legend-label">{{ item.label }}</span>
-              <span class="legend-value">{{ item.value }}</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Recent claims -->
-        <div class="panel-card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Ostatnie szkody</div>
-              <div class="card-subtitle">Najnowsze zgłoszenia</div>
+          <div class="gsap-element bg-gradient-to-b from-[#1c1c1e] to-[#121214] border border-white/10 rounded-3xl p-6 md:p-8 shadow-[0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+            <div class="absolute -right-10 -top-10 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-colors"></div>
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(168,85,247,0.15)] group-hover:scale-110 transition-transform">
+              <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
             </div>
-            <a class="card-link" routerLink="/claims">Wszystkie →</a>
+            <div class="text-sm tracking-wide text-gray-400 font-medium uppercase mb-1">Wszystkie szkody</div>
+            <div class="text-4xl md:text-5xl font-black text-white tracking-tight">{{ stats.totalClaims }}</div>
           </div>
-          <div *ngIf="!recentClaims.length" class="empty-panel">
-            <mat-icon>check_circle_outline</mat-icon>
-            <p>Brak zgłoszonych szkód</p>
-            <a routerLink="/claims/new" class="btn-mini">Zgłoś pierwszą</a>
+
+          <div class="gsap-element bg-gradient-to-b from-[#1c1c1e] to-[#121214] border border-white/10 rounded-3xl p-6 md:p-8 shadow-[0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+            <div class="absolute -right-10 -top-10 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl group-hover:bg-orange-500/30 transition-colors"></div>
+            <div class="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(249,115,22,0.15)] group-hover:scale-110 transition-transform">
+              <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="text-sm tracking-wide text-gray-400 font-medium uppercase mb-1">Rozpatrywane</div>
+            <div class="text-4xl md:text-5xl font-black text-white tracking-tight">{{ stats.pendingClaims }}</div>
           </div>
-          <div class="claims-list">
-            <div *ngFor="let claim of recentClaims" class="claim-row"
-                 [routerLink]="['/claims', claim.id]">
-              <div class="claim-status-dot" [style.background]="getClaimColor(claim.status)"></div>
-              <div class="claim-info">
-                <div class="claim-number">{{ claim.claim_number }}</div>
-                <div class="claim-type">{{ claim.incident_type_display }}</div>
+
+          @if (auth.isAgent()) {
+            <a routerLink="/agent/queue" class="gsap-element bg-gradient-to-b from-[#1c1c1e] to-[#121214] border border-white/10 rounded-3xl p-6 md:p-8 shadow-[0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+              <div class="absolute -right-10 -top-10 w-40 h-40 bg-red-500/20 rounded-full blur-3xl group-hover:bg-red-500/30 transition-colors"></div>
+              <div class="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(239,68,68,0.15)] group-hover:scale-110 transition-transform">
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 011.875 1.875v1.5a1.875 1.875 0 01-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-1.5c0-1.036.84-1.875 1.875-1.875z" />
+                </svg>
               </div>
-              <div class="claim-right">
-                <div class="claim-amount">{{ claim.estimated_damage | currency:'PLN':'symbol':'1.0-0':'pl' }}</div>
-                <div class="status-badge-sm" [style.background]="getClaimColor(claim.status) + '20'"
-                     [style.color]="getClaimColor(claim.status)">
-                  {{ claim.status_display }}
+              <div class="text-sm tracking-wide text-gray-400 font-medium uppercase mb-1">Kolejka szkód</div>
+              <div class="text-4xl md:text-5xl font-black text-white tracking-tight">{{ stats.queueCount }}</div>
+            </a>
+          }
+          @if (auth.isAdmin()) {
+            <a routerLink="/admin" class="gsap-element bg-gradient-to-b from-[#1c1c1e] to-[#121214] border border-[#bf5af2]/20 rounded-3xl p-6 md:p-8 shadow-[0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+              <div class="absolute -right-10 -top-10 w-40 h-40 bg-[#bf5af2]/15 rounded-full blur-3xl group-hover:bg-[#bf5af2]/25 transition-colors"></div>
+              <div class="w-14 h-14 rounded-2xl bg-[#bf5af2]/10 border border-[#bf5af2]/20 text-[#bf5af2] flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(191,90,242,0.15)] group-hover:scale-110 transition-transform">
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+                </svg>
+              </div>
+              <div class="text-sm tracking-wide text-gray-400 font-medium uppercase mb-1">Panel admina</div>
+              <div class="text-lg font-bold text-white tracking-tight">Zarządzaj systemem</div>
+            </a>
+          }
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+          <!-- Recent Policies -->
+          <div>
+            <div class="gsap-element flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-white tracking-tight">Ostatnie polisy</h2>
+              <a routerLink="/policies" class="text-sm font-semibold text-blue-500 hover:text-blue-400 transition-colors flex items-center gap-1 group">
+                Zobacz wszystkie
+                <svg class="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+              </a>
+            </div>
+
+            @if (recentPolicies.length === 0) {
+              <div class="gsap-element bg-[#161617]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-12 text-center shadow-2xl">
+                <div class="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center mb-4 text-gray-500">
+                  <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
                 </div>
+                <p class="text-gray-400 font-medium">Brak aktywnych polis</p>
               </div>
-            </div>
+            } @else {
+              <div class="bg-[#161617]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-hidden divide-y divide-white/5">
+                @for (policy of recentPolicies; track policy.id) {
+                  <a [routerLink]="['/policies', policy.id]" class="gsap-element flex items-center gap-5 p-5 md:p-6 hover:bg-white/[0.03] transition-colors group">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 shadow-inner group-hover:from-blue-500/30 transition-colors">
+                      <!-- Render SVG based on category -->
+                      <ng-container *ngTemplateOutlet="categoryIcon; context: { $implicit: policy.product?.category || policy.product_category }"></ng-container>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3 class="text-white font-semibold text-lg truncate group-hover:text-blue-200 transition-colors">{{ policy.product?.name || policy.product_name || 'Nieznany produkt' }}</h3>
+                      <p class="text-gray-400 text-sm font-mono mt-0.5 tracking-wide">{{ policy.policy_number }}</p>
+                    </div>
+                    <div class="flex flex-col items-end gap-2 shrink-0">
+                      <span [class]="'px-3 py-1 rounded-full text-[11px] uppercase tracking-wider font-bold border ' + getStatusClasses(policy.status)">
+                        {{ getStatusLabel(policy.status) }}
+                      </span>
+                    </div>
+                  </a>
+                }
+              </div>
+            }
           </div>
-        </div>
 
-        <!-- Recent policies -->
-        <div class="panel-card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Aktywne polisy</div>
-              <div class="card-subtitle">Twoje ubezpieczenia</div>
+          <!-- Recent Claims -->
+          <div>
+            <div class="gsap-element flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-white tracking-tight">Ostatnie szkody</h2>
+              <a routerLink="/claims" class="text-sm font-semibold text-blue-500 hover:text-blue-400 transition-colors flex items-center gap-1 group">
+                Zobacz wszystkie
+                <svg class="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+              </a>
             </div>
-            <a class="card-link" routerLink="/policies">Wszystkie →</a>
-          </div>
-          <div *ngIf="!recentPolicies.length" class="empty-panel">
-            <mat-icon>shield</mat-icon>
-            <p>Brak aktywnych polis</p>
-          </div>
-          <div class="policies-list">
-            <div *ngFor="let policy of recentPolicies" class="policy-row"
-                 [routerLink]="['/policies', policy.id]">
-              <div class="policy-icon" [style.background]="getCategoryGradient(policy)">
-                <mat-icon>{{ getCategoryIcon(policy) }}</mat-icon>
-              </div>
-              <div class="policy-info">
-                <div class="policy-name">{{ policy.product?.name || policy.product_name }}</div>
-                <div class="policy-num">{{ policy.policy_number }}</div>
-              </div>
-              <div class="policy-right">
-                <div class="policy-amount">{{ policy.coverage_amount | currency:'PLN':'symbol':'1.0-0':'pl' }}</div>
-                <div class="policy-expiry" [class.expiry-soon]="(policy.days_to_expiry ?? 999) < 30">
-                  <mat-icon>schedule</mat-icon> {{ policy.days_to_expiry }}d
+
+            @if (recentClaims.length === 0) {
+              <div class="gsap-element bg-[#161617]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-12 text-center shadow-2xl">
+                <div class="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center mb-4 text-gray-500">
+                  <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
                 </div>
+                <p class="text-gray-400 font-medium">Brak zgłoszonych szkód</p>
               </div>
-            </div>
+            } @else {
+              <div class="bg-[#161617]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-hidden divide-y divide-white/5">
+                @for (claim of recentClaims; track claim.id) {
+                  <a [routerLink]="['/claims', claim.id]" class="gsap-element flex items-center gap-5 p-5 md:p-6 hover:bg-white/[0.03] transition-colors group">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 shadow-inner group-hover:from-purple-500/30 transition-colors">
+                      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2.25m0 0v2.25m0-2.25h2.25m-2.25 0H9.75m1.5-6a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3 class="text-blue-400 font-mono font-bold text-base truncate group-hover:text-cyan-300 transition-colors">{{ claim.claim_number }}</h3>
+                      <p class="text-gray-400 text-sm mt-1 truncate">{{ claim.incident_date | date:'dd.MM.yyyy' }} &bull; {{ claim.incident_location }}</p>
+                    </div>
+                    <div class="flex flex-col items-end gap-2 shrink-0">
+                       <div class="text-white font-bold text-lg whitespace-nowrap">{{ claim.estimated_damage }} zł</div>
+                      <span [class]="'px-3 py-1 rounded-full text-[11px] uppercase tracking-wider font-bold border ' + getClaimStatusClasses(claim.status)">
+                        {{ getClaimStatusLabel(claim.status) }}
+                      </span>
+                    </div>
+                  </a>
+                }
+              </div>
+            }
           </div>
         </div>
-
-        <!-- Notifications -->
-        <div class="panel-card notif-panel">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Powiadomienia</div>
-              <div class="card-subtitle">Ostatnia aktywność</div>
-            </div>
-            <button class="card-link-btn" (click)="markAllRead()">
-              <mat-icon>done_all</mat-icon> Przeczytaj wszystkie
-            </button>
-          </div>
-          <div *ngIf="!notifications.length" class="empty-panel">
-            <mat-icon>notifications_none</mat-icon>
-            <p>Brak nowych powiadomień</p>
-          </div>
-          <div class="notif-list">
-            <div *ngFor="let n of notifications" class="notif-item"
-                 [class.notif-unread]="!n.is_read" (click)="markRead(n)">
-              <div class="notif-icon-wrap" [class]="'notif-' + getNotifType(n.notification_type)">
-                <mat-icon>{{ getNotifIcon(n.notification_type) }}</mat-icon>
-              </div>
-              <div class="notif-body">
-                <div class="notif-title">{{ n.title }}</div>
-                <div class="notif-time">{{ n.created_at | date:'d MMM, HH:mm' }}</div>
-              </div>
-              <div class="notif-unread-dot" *ngIf="!n.is_read"></div>
-            </div>
-          </div>
-        </div>
-
-      </div>
+      }
     </div>
-  `,
-  styles: [`
-    .dash { max-width: 1280px; margin: 0 auto; }
 
-    /* Header */
-    .dash-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 28px;
-    }
-    .dash-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
-    .subtitle { color: var(--text-secondary); margin-top: 4px; font-size: 14px; }
-    .btn-new-claim {
-      background: linear-gradient(135deg, #4f46e5, #06b6d4) !important;
-      color: white !important; border-radius: 12px !important; font-weight: 700 !important;
-      box-shadow: 0 4px 16px rgba(79,70,229,.3) !important;
-    }
-
-    /* KPI Grid */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px; margin-bottom: 24px;
-    }
-    .kpi-card {
-      position: relative; border-radius: 16px; padding: 20px;
-      display: flex; align-items: center; gap: 16px;
-      cursor: pointer; overflow: hidden;
-      transition: transform .2s, box-shadow .2s;
-      box-shadow: 0 4px 20px rgba(0,0,0,.08);
-    }
-    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,.12); }
-    .kpi-card::before {
-      content: ''; position: absolute; inset: 0; opacity: .08;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='white' fill-opacity='1'%3E%3Ccircle cx='55' cy='5' r='5'/%3E%3Ccircle cx='5' cy='55' r='5'/%3E%3C/g%3E%3C/svg%3E");
-    }
-    .kpi-indigo  { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; }
-    .kpi-cyan    { background: linear-gradient(135deg, #0891b2, #06b6d4); color: white; }
-    .kpi-emerald { background: linear-gradient(135deg, #059669, #10b981); color: white; }
-    .kpi-amber   { background: linear-gradient(135deg, #d97706, #f59e0b); color: white; }
-    .kpi-purple  { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
-    .kpi-icon { font-size: 28px; opacity: .85; }
-    .kpi-icon mat-icon { font-size: 28px; width: 28px; height: 28px; color: white; }
-    .kpi-body { flex: 1; }
-    .kpi-value { font-size: 30px; font-weight: 800; line-height: 1; color: white; }
-    .kpi-amount { font-size: 20px; }
-    .kpi-label { font-size: 12px; opacity: .8; color: white; margin-top: 4px; }
-    .kpi-arrow { opacity: .5; }
-    .kpi-arrow mat-icon { color: white; }
-    .kpi-trend mat-icon { color: white; opacity: .7; }
-    .kpi-pulse {
-      position: absolute; top: 16px; right: 16px;
-      width: 10px; height: 10px; border-radius: 50%; background: white;
-    }
-    .kpi-pulse::after {
-      content: ''; position: absolute; inset: -4px;
-      border-radius: 50%; background: rgba(255,255,255,.4);
-      animation: pulse-ring 1.5s ease infinite;
-    }
-    @keyframes pulse-ring {
-      0% { transform: scale(1); opacity: 1; }
-      100% { transform: scale(2.5); opacity: 0; }
-    }
-
-    /* Main grid */
-    .main-grid {
-      display: grid;
-      grid-template-columns: 340px 1fr 1fr;
-      grid-template-rows: auto auto;
-      gap: 20px;
-    }
-    .chart-card { grid-row: 1 / 3; }
-    .notif-panel { grid-column: 2 / 4; }
-
-    /* Card base */
-    .chart-card, .panel-card {
-      background: white; border-radius: 16px; padding: 24px;
-      box-shadow: var(--shadow-md); border: 1px solid var(--border);
-    }
-    .card-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      margin-bottom: 20px;
-    }
-    .card-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-    .card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .card-link {
-      display: flex; align-items: center; gap: 2px;
-      font-size: 12px; font-weight: 600; color: #4f46e5;
-      text-decoration: none; transition: gap .15s;
-    }
-    .card-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .card-link:hover { gap: 6px; }
-    .card-link-btn {
-      display: flex; align-items: center; gap: 4px;
-      background: none; border: none; cursor: pointer;
-      font-size: 12px; font-weight: 600; color: #4f46e5; font-family: inherit;
-    }
-    .card-link-btn mat-icon { font-size: 14px; width: 14px; height: 14px; }
-
-    /* Doughnut chart */
-    .chart-wrap {
-      position: relative; max-width: 200px; margin: 0 auto 20px;
-    }
-    .chart-center-label {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-    }
-    .center-value { font-size: 28px; font-weight: 800; color: var(--text-primary); }
-    .center-text  { font-size: 11px; color: var(--text-muted); }
-    .empty-chart {
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      padding: 32px; color: var(--text-muted);
-    }
-    .empty-chart mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .3; }
-    .legend-list { display: flex; flex-direction: column; gap: 8px; }
-    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .legend-label { flex: 1; color: var(--text-secondary); }
-    .legend-value { font-weight: 700; color: var(--text-primary); }
-
-    /* Claims list */
-    .claims-list { display: flex; flex-direction: column; gap: 4px; }
-    .claim-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-radius: 10px; cursor: pointer;
-      transition: background .15s;
-    }
-    .claim-row:hover { background: var(--surface-3); }
-    .claim-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .claim-info { flex: 1; min-width: 0; }
-    .claim-number { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .claim-type { font-size: 12px; color: var(--text-muted); }
-    .claim-right { text-align: right; flex-shrink: 0; }
-    .claim-amount { font-size: 13px; font-weight: 700; color: var(--text-primary); }
-    .status-badge-sm {
-      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-      display: inline-block; margin-top: 2px;
-    }
-
-    /* Policies list */
-    .policies-list { display: flex; flex-direction: column; gap: 4px; }
-    .policy-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-radius: 10px; cursor: pointer;
-      transition: background .15s;
-    }
-    .policy-row:hover { background: var(--surface-3); }
-    .policy-icon {
-      width: 40px; height: 40px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .policy-icon mat-icon { color: white; font-size: 20px; }
-    .policy-info { flex: 1; min-width: 0; }
-    .policy-name { font-size: 13px; font-weight: 600;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .policy-num { font-size: 11px; color: var(--text-muted); }
-    .policy-right { text-align: right; flex-shrink: 0; }
-    .policy-amount { font-size: 13px; font-weight: 700; }
-    .policy-expiry {
-      display: flex; align-items: center; gap: 2px; justify-content: flex-end;
-      font-size: 11px; color: var(--text-muted); margin-top: 2px;
-    }
-    .policy-expiry mat-icon { font-size: 12px; width: 12px; height: 12px; }
-    .expiry-soon { color: #f59e0b !important; font-weight: 600; }
-
-    /* Notifications */
-    .notif-list {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    }
-    .notif-item {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 12px; border-radius: 10px; cursor: pointer;
-      transition: background .15s; position: relative;
-      border: 1px solid transparent;
-    }
-    .notif-item:hover { background: var(--surface-3); }
-    .notif-unread { background: #f0f4ff; border-color: #e0e7ff; }
-    .notif-icon-wrap {
-      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .notif-icon-wrap mat-icon { font-size: 18px; }
-    .notif-positive { background: #d1fae5; color: #059669; }
-    .notif-negative { background: #fee2e2; color: #dc2626; }
-    .notif-info     { background: #dbeafe; color: #2563eb; }
-    .notif-warning  { background: #fef3c7; color: #d97706; }
-    .notif-body { flex: 1; min-width: 0; }
-    .notif-title { font-size: 12px; font-weight: 600; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .notif-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .notif-unread-dot {
-      width: 8px; height: 8px; background: #4f46e5; border-radius: 50%; flex-shrink: 0; margin-top: 4px;
-    }
-
-    /* Empty */
-    .empty-panel {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 24px; color: var(--text-muted); gap: 8px; text-align: center;
-    }
-    .empty-panel mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .25; }
-    .empty-panel p { font-size: 13px; }
-    .btn-mini {
-      background: var(--primary); color: white; padding: 6px 14px;
-      border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none;
-    }
-
-    @media (max-width: 1100px) {
-      .main-grid { grid-template-columns: 1fr 1fr; }
-      .chart-card { grid-row: auto; grid-column: 1 / -1; }
-      .notif-panel { grid-column: 1 / -1; }
-    }
-    @media (max-width: 700px) {
-      .main-grid { grid-template-columns: 1fr; }
-      .notif-list { grid-template-columns: 1fr; }
-    }
-  `],
+    <!-- Reusable template for category icons -->
+    <ng-template #categoryIcon let-category>
+      @switch (category) {
+        @case ('auto') {
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
+        }
+        @case ('property') {
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
+        }
+        @case ('health') {
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" /></svg>
+        }
+        @case ('travel') {
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+        }
+        @default {
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+        }
+      }
+    </ng-template>
+  `
 })
-export class DashboardComponent implements OnInit {
-  today = new Date();
+export class DashboardComponent implements OnInit, AfterViewInit {
+  auth = inject(AuthService);
+  private policyService = inject(PolicyService);
+  private claimService = inject(ClaimService);
+  private el = inject(ElementRef);
+
+  loading = true;
   recentPolicies: Policy[] = [];
   recentClaims: Claim[] = [];
-  notifications: Notification[] = [];
-  activePoliciesCount = 0;
-  totalPoliciesCount = 0;
-  openClaimsCount = 0;
-  totalClaimsCount = 0;
-  pendingClaimsCount = 0;
-  totalPaidAmount = 0;
-
-  claimStatusLegend: { label: string; color: string; value: number }[] = [];
-
-  doughnutData: ChartData<'doughnut'> = {
-    labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#fff' }],
-  };
-
-  doughnutOptions: ChartOptions<'doughnut'> = {
-    responsive: true,
-    cutout: '70%',
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => ` ${ctx.label}: ${ctx.raw}`,
-        },
-      },
-    },
-  };
-
-  private categoryGradients: Record<string, string> = {
-    auto: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
-    property: 'linear-gradient(135deg,#047857,#10b981)',
-    health: 'linear-gradient(135deg,#b91c1c,#ef4444)',
-    life: 'linear-gradient(135deg,#6d28d9,#a855f7)',
-    travel: 'linear-gradient(135deg,#0e7490,#06b6d4)',
-    liability: 'linear-gradient(135deg,#c2410c,#f97316)',
-  };
-  private categoryIcons: Record<string, string> = {
-    auto: 'directions_car', property: 'home', health: 'health_and_safety',
-    life: 'favorite', travel: 'flight', liability: 'shield',
-  };
-
-  constructor(
-    public auth: AuthService,
-    private policyService: PolicyService,
-    private claimService: ClaimService,
-    private notifService: NotificationService,
-  ) {}
+  stats = { activePolicies: 0, totalClaims: 0, pendingClaims: 0, queueCount: 0 };
 
   ngOnInit(): void {
     forkJoin({
       policies: this.policyService.getPolicies(),
       claims: this.claimService.getClaims(),
-      notifications: this.notifService.getNotifications(),
-    }).subscribe(({ policies, claims, notifications }) => {
-      this.totalPoliciesCount = policies.count;
-      this.recentPolicies = policies.results.filter(p => p.status === 'active').slice(0, 5);
-      this.activePoliciesCount = policies.results.filter(p => p.status === 'active').length;
-
-      this.totalClaimsCount = claims.count;
-      this.recentClaims = claims.results.slice(0, 5);
-      this.openClaimsCount = claims.results.filter(
-        c => !['closed', 'paid', 'rejected'].includes(c.status)
-      ).length;
-      this.totalPaidAmount = claims.results
-        .filter(c => c.status === 'paid' && c.approved_amount)
-        .reduce((s, c) => s + Number(c.approved_amount), 0);
-
-      this.buildChart(claims.results);
-      this.notifications = (notifications as any).results?.slice(0, 8) || [];
+    }).subscribe({
+      next: ({ policies, claims }) => {
+        this.recentPolicies = policies.results.slice(0, 3);
+        this.recentClaims = claims.results.slice(0, 4); // show 4 for better grid balance
+        this.stats.activePolicies = policies.results.filter(p => p.status === 'active').length;
+        this.stats.totalClaims = claims.count;
+        this.stats.pendingClaims = claims.results.filter(
+          c => ['submitted', 'under_review', 'additional_info'].includes(c.status)
+        ).length;
+        this.loading = false;
+        
+        setTimeout(() => this.animateElements(), 50);
+      },
+      error: () => { this.loading = false; }
     });
 
-    if (this.auth.isAgent) {
-      this.claimService.getQueue().subscribe(r => { this.pendingClaimsCount = r.count; });
-    }
-  }
-
-  buildChart(claims: Claim[]): void {
-    const counts: Partial<Record<ClaimStatus, number>> = {};
-    claims.forEach(c => { counts[c.status] = (counts[c.status] || 0) + 1; });
-
-    const statusesToShow: ClaimStatus[] = ['submitted', 'under_review', 'approved', 'rejected', 'paid', 'closed'];
-    const labels: string[] = [];
-    const data: number[] = [];
-    const colors: string[] = [];
-
-    statusesToShow.forEach(s => {
-      if (counts[s]) {
-        labels.push(STATUS_CONFIG[s].label);
-        data.push(counts[s]!);
-        colors.push(STATUS_CONFIG[s].color);
-        this.claimStatusLegend.push({ label: STATUS_CONFIG[s].label, color: STATUS_CONFIG[s].color, value: counts[s]! });
-      }
-    });
-
-    this.doughnutData = {
-      labels,
-      datasets: [{ data, backgroundColor: colors, borderWidth: 3, borderColor: '#fff' }],
-    };
-  }
-
-  getFirstName(): string { return this.auth.currentUser?.full_name?.split(' ')[0] ?? ''; }
-  getClaimColor(s: ClaimStatus): string { return STATUS_CONFIG[s]?.color || '#666'; }
-  getCategoryIcon(p: Policy): string {
-    const cat = (p.product as any)?.category || p.product_category || '';
-    return this.categoryIcons[cat] || 'policy';
-  }
-  getCategoryGradient(p: Policy): string {
-    const cat = (p.product as any)?.category || p.product_category || '';
-    return this.categoryGradients[cat] || 'linear-gradient(135deg,#4f46e5,#06b6d4)';
-  }
-
-  getNotifIcon(type: string): string {
-    const m: Record<string, string> = {
-      claim_submitted: 'send', claim_status_changed: 'update',
-      policy_status_changed: 'policy', claim_approved: 'check_circle',
-      claim_rejected: 'cancel', claim_paid: 'payments',
-      additional_info: 'info', policy_expiring: 'schedule',
-    };
-    return m[type] || 'notifications';
-  }
-  getNotifType(type: string): string {
-    if (['claim_approved', 'claim_paid'].includes(type)) return 'positive';
-    if (['claim_rejected'].includes(type)) return 'negative';
-    if (['additional_info', 'policy_expiring'].includes(type)) return 'warning';
-    return 'info';
-  }
-
-  markRead(n: Notification): void {
-    if (!n.is_read) {
-      this.notifService.markRead(n.id).subscribe(() => {
-        n.is_read = true; this.notifService.refreshCount();
+    if (this.auth.isAgent()) {
+      this.claimService.getAgentQueue().subscribe(q => {
+        this.stats.queueCount = q.count;
       });
     }
   }
-  markAllRead(): void {
-    this.notifService.markAllRead().subscribe(() => {
-      this.notifications.forEach(n => (n.is_read = true));
-      this.notifService.refreshCount();
-    });
+
+  ngAfterViewInit() {
+    this.animateElements();
+  }
+
+  animateElements() {
+    const elements = this.el.nativeElement.querySelectorAll('.gsap-element');
+    console.log("Dodano animacje GSAP do:", elements.length, "elementów");
+    if (elements.length > 0) {
+      gsap.fromTo(elements, 
+        { y: 40, opacity: 0 }, 
+        { y: 0, opacity: 1, duration: 0.7, stagger: 0.1, ease: 'power3.out', overwrite: true }
+      );
+    }
+  }
+
+  getWelcomeMessage(): string {
+    if (this.auth.isAgent()) return 'Twój panel operacyjny centrum dowodzenia';
+    return 'Zarządzaj polisami i szybko zgłaszaj zdarzenia';
+  }
+
+  getStatusClasses(status: string): string {
+    const classes: Record<string, string> = {
+      active: 'bg-[#30d158]/10 text-[#30d158] border-[#30d158]/20',
+      expired: 'bg-white/5 text-gray-400 border-white/10',
+      cancelled: 'bg-[#ff453a]/10 text-[#ff453a] border-[#ff453a]/20',
+      pending: 'bg-[#ff9f0a]/10 text-[#ff9f0a] border-[#ff9f0a]/20'
+    };
+    return classes[status] || classes['expired'];
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      active: 'Aktywna', expired: 'Wygasła', cancelled: 'Anulowana', pending: 'Oczekująca'
+    };
+    return labels[status] || status;
+  }
+
+  getClaimStatusClasses(status: string): string {
+    const classes: Record<string, string> = {
+      draft: 'bg-white/5 text-gray-400 border-white/10',
+      submitted: 'bg-[#0a84ff]/10 text-[#0a84ff] border-[#0a84ff]/20',
+      under_review: 'bg-[#ff9f0a]/10 text-[#ff9f0a] border-[#ff9f0a]/20',
+      additional_info: 'bg-[#ffd60a]/10 text-[#ffd60a] border-[#ffd60a]/20',
+      approved: 'bg-[#30d158]/10 text-[#30d158] border-[#30d158]/20',
+      partially_approved: 'bg-[#32ade6]/10 text-[#32ade6] border-[#32ade6]/20',
+      rejected: 'bg-[#ff453a]/10 text-[#ff453a] border-[#ff453a]/20',
+      paid: 'bg-[#30d158]/10 text-[#30d158] border-[#30d158]/20',
+      closed: 'bg-white/5 text-gray-400 border-white/10'
+    };
+    return classes[status] || classes['draft'];
+  }
+
+  getClaimStatusLabel(status: string): string {
+    return CLAIM_STATUS_LABELS[status as keyof typeof CLAIM_STATUS_LABELS] || status;
   }
 }

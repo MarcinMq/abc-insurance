@@ -7,15 +7,24 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import update_session_auth_hash
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from .models import User
+from .models import User, AgentProfile
 from .serializers import (
     CustomTokenObtainPairSerializer,
     UserRegisterSerializer,
     UserProfileSerializer,
     UserListSerializer,
     ChangePasswordSerializer,
+    AdminUserSerializer,
+    AdminCreateUserSerializer,
+    AdminRoleChangeSerializer,
 )
 from .permissions import IsAgentOrAdmin
+
+
+class IsAdminUser(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and
+                    (request.user.role == 'admin' or request.user.is_staff))
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -108,3 +117,56 @@ class UserListView(generics.ListAPIView):
     @extend_schema(summary="Lista klientów (tylko dla agentów)")
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+
+class AdminUserListCreateView(generics.ListCreateAPIView):
+    """Lista wszystkich użytkowników + tworzenie nowych — tylko admin."""
+    permission_classes = [IsAdminUser]
+    search_fields = ['username', 'email', 'first_name', 'last_name']
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return AdminCreateUserSerializer
+        return AdminUserSerializer
+
+    def get_queryset(self):
+        return User.objects.exclude(username='admin').order_by('role', '-created_at')
+
+    @extend_schema(summary="Lista wszystkich użytkowników (admin)")
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(summary="Utwórz użytkownika (admin)")
+    def post(self, request, *args, **kwargs):
+        serializer = AdminCreateUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(AdminUserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class AdminUserRoleView(APIView):
+    """Zmiana roli użytkownika — tylko admin."""
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(summary="Zmień rolę użytkownika (admin)")
+    def patch(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'Użytkownik nie istnieje.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AdminRoleChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_role = serializer.validated_data['role']
+        old_role = user.role
+        user.role = new_role
+        user.save()
+
+        # Utwórz AgentProfile jeśli zmieniono na agenta
+        if new_role == User.Role.AGENT and old_role != User.Role.AGENT:
+            AgentProfile.objects.get_or_create(
+                user=user,
+                defaults={'license_number': f'AG{user.id:03d}', 'department': 'Ogólny'}
+            )
+
+        return Response(AdminUserSerializer(user).data)

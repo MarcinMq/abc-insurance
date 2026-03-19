@@ -1,115 +1,109 @@
-# ABC Insurance — System zarządzania ubezpieczeniami
+# ABC Insurance
 
-Aplikacja webowa dla towarzystwa ubezpieczeniowego **ABC Insurance**, umożliwiająca klientom zgłaszanie szkód, przeglądanie polis oraz śledzenie statusu roszczeń. Agenci ubezpieczeniowi mogą przeglądać i rozpatrywać szkody, zarządzać polisami klientów oraz obsługiwać kolejkę zgłoszeń.
+Aplikacja webowa fullstack do zarządzania polisami ubezpieczeniowymi i szkodami. Zbudowana w Django REST Framework i Angular 17.
 
-## Technologie
+## Stack Technologiczny
 
 | Warstwa | Technologia |
 |---------|-------------|
-| Backend | Django 4.2 + Django REST Framework |
-| Autoryzacja | JWT (djangorestframework-simplejwt) |
-| Frontend | Angular 17 (standalone components) |
-| UI Library | Angular Material |
+| Backend | Python 3.11, Django 4.2, Django REST Framework |
+| Autoryzacja | JWT (djangorestframework-simplejwt) — access 1h, refresh 7d z rotacją i blacklistą |
+| Frontend | Angular 17 (standalone components, signals, lazy loading) |
+| Stylowanie | Tailwind CSS |
 | Baza danych | PostgreSQL 15 |
-| Konteneryzacja | Docker + docker-compose |
-| API Docs | drf-spectacular (Swagger UI) |
+| Konteneryzacja | Docker + Docker Compose |
+| Dokumentacja API | drf-spectacular (Swagger UI) |
 
-## Architektura systemu
+## Funkcjonalności
 
-```
-abc-insurance/
-├── backend/                    # Django REST API
-│   ├── abc_insurance/          # Konfiguracja projektu
-│   ├── users/                  # Moduł użytkowników (klient/agent/admin)
-│   ├── policies/               # Moduł polis ubezpieczeniowych
-│   ├── claims/                 # Moduł zgłoszeń szkód
-│   ├── notifications/          # Moduł powiadomień
-│   └── fixtures/               # Dane startowe (produkty ubezpieczeniowe)
-└── frontend/                   # Angular 17
-    └── src/app/
-        ├── core/               # Serwisy, interceptory, guards
-        ├── features/           # Moduły funkcjonalne
-        │   ├── auth/           # Logowanie i rejestracja
-        │   ├── dashboard/      # Panel główny
-        │   ├── policies/       # Lista i szczegóły polis
-        │   ├── claims/         # Lista, szczegóły i formularz szkód
-        │   └── agent/          # Kolejka agenta
-        └── shared/             # Modele TypeScript
-```
-
-## Role i uprawnienia
-
-### Klient (`customer`)
+### Klient
 - Rejestracja i logowanie
 - Przeglądanie własnych polis ubezpieczeniowych
-- Zgłaszanie nowych szkód (formularz wieloetapowy)
-- Wysyłanie szkody do rozpatrzenia
+- Zgłaszanie szkód przez wieloetapowy formularz
 - Śledzenie statusu szkody w czasie rzeczywistym
-- Dodawanie dokumentów do zgłoszenia szkody
 - Otrzymywanie powiadomień o zmianach statusu
 
-### Agent ubezpieczeniowy (`agent`)
-- Wszystkie uprawnienia klienta
-- Przeglądanie polis i szkód wszystkich klientów
-- Kolejka szkód do rozpatrzenia (`/agent/queue`)
-- Zmiana statusu szkód (workflow z walidacją)
-- Zatwierdzanie/odrzucanie szkód z kwotą i uzasadnieniem
+### Agent
+- Przeglądanie wszystkich klientów, polis i szkód
+- Przetwarzanie kolejki szkód (`/agent/queue`)
+- Zatwierdzanie / odrzucanie / żądanie dodatkowych informacji
 - Zarządzanie statusami polis
 - Przypisywanie szkód do agentów
 
-## Workflow statusów szkody
+### Administrator
+- Pełny panel administracyjny (`/admin`) z zarządzaniem użytkownikami
+- Tworzenie nowych użytkowników (agenci, klienci, administratorzy)
+- Zmiana ról użytkowników w czasie rzeczywistym
+- Przegląd systemowy: szkody według statusu, ostatnia aktywność
+- Dostęp do Django Admin pod `/admin/` (panel backendowy Django)
+
+## Workflow Statusów Szkód
 
 ```
-DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → PAID → CLOSED
-                 ↘                → PARTIALLY_APPROVED ↗
-                  → ADDITIONAL_INFO → UNDER_REVIEW
-                 ↘                → REJECTED → CLOSED
+draft → submitted → under_review → approved → paid → closed
+                                 ↘ partially_approved ↗
+                                 ↘ additional_info → under_review
+                  ↘ rejected → closed
 ```
 
-## Produkty ubezpieczeniowe (dane startowe)
+Każde przejście jest walidowane po stronie serwera. Każda zmiana jest zapisywana w `ClaimStatusHistory`.
 
-- OC Komunikacyjne (liability)
-- AC Auto Casco (auto)
-- Ubezpieczenie Nieruchomości (property)
-- Ubezpieczenie Zdrowotne Premium (health)
-- Ubezpieczenie na Życie (life)
-- Ubezpieczenie Podróżne (travel)
+## Struktura Projektu
 
-## Uruchomienie z Docker
+```
+abc-insurance/
+├── backend/
+│   ├── abc_insurance/      # Ustawienia Django i URLs
+│   ├── users/              # Autoryzacja, role, JWT, zarządzanie użytkownikami
+│   ├── policies/           # Produkty ubezpieczeniowe i polisy klientów
+│   ├── claims/             # Szkody z workflow statusów
+│   ├── notifications/      # Powiadomienia oparte na eventach
+│   └── fixtures/           # Dane początkowe - 6 produktów ubezpieczeniowych
+├── frontend/
+│   └── src/app/
+│       ├── core/           # Serwisy, interceptory, guardy, modele
+│       └── features/       # auth, dashboard, policies, claims, agent, admin, landing
+├── docker-compose.yml
+└── start.bat               # Launcher lokalnego dev (Windows)
+```
+
+## Szybki Start z Docker
+
+**⚠️ Ostrzeżenie bezpieczeństwa:** Przed wdrożeniem na produkcję:
+1. Zmień `SECRET_KEY` w `docker-compose.yml` na losowy ciąg znaków
+2. Ustaw `DEBUG=False` w środowisku backendu
+3. Zaktualizuj dane dostępowe do bazy danych
+4. Prawidłowo skonfiguruj originy CORS
 
 ```bash
-# Klonowanie i start
-git clone <repo>
+git clone <url-repo>
 cd abc-insurance
 docker-compose up --build
-
-# Dostęp
-# Frontend:  http://localhost:4200
-# Backend API: http://localhost:8000/api/
-# Swagger UI:  http://localhost:8000/api/docs/
-# Django Admin: http://localhost:8000/admin/
 ```
 
-## Uruchomienie bez Docker
+| Serwis | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| Backend API | http://localhost:8000/api/ |
+| Swagger UI | http://localhost:8000/api/docs/ |
+| Django Admin | http://localhost:8000/admin/ |
+
+## Lokalne Uruchomienie (bez Docker)
 
 ### Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+venv\Scripts\activate        # Windows
+pip install -r requirements-local.txt
 
-# Skonfiguruj bazę danych PostgreSQL i utwórz plik .env:
-# SECRET_KEY=your-secret-key
-# DB_NAME=abc_insurance
-# DB_USER=abc_user
-# DB_PASSWORD=your_password
-# DB_HOST=localhost
+# SQLite (bez potrzeby PostgreSQL):
+set USE_SQLITE=True
 
 python manage.py migrate
 python manage.py loaddata fixtures/initial_data.json
-python manage.py createsuperuser
+python manage.py seed_demo_data
 python manage.py runserver
 ```
 
@@ -118,54 +112,110 @@ python manage.py runserver
 ```bash
 cd frontend
 npm install
-ng serve
+npm start
 ```
 
-## Tworzenie użytkowników testowych
+### Alternatywnie: start.bat (Windows)
+
+Automatyczne uruchomienie backendu i frontendu w osobnych oknach:
 
 ```bash
-# Klient
-python manage.py shell -c "
-from users.models import User
-User.objects.create_user('klient1', 'klient@abc.pl', 'Haslo123!',
-  first_name='Jan', last_name='Kowalski', role='customer')
-"
-
-# Agent (wymaga AgentProfile)
-python manage.py shell -c "
-from users.models import User, AgentProfile
-u = User.objects.create_user('agent1', 'agent@abc.pl', 'Haslo123!',
-  first_name='Anna', last_name='Nowak', role='agent')
-AgentProfile.objects.create(user=u, license_number='AG/2024/001',
-  department='Szkody komunikacyjne')
-"
+start.bat
 ```
 
-## Endpointy API (wybrane)
+## Konta Demo
 
-| Metoda | Endpoint | Opis |
-|--------|----------|------|
-| POST | `/api/auth/login/` | Logowanie (JWT) |
-| POST | `/api/auth/register/` | Rejestracja klienta |
-| GET | `/api/auth/profile/` | Profil zalogowanego |
-| GET | `/api/policies/` | Lista polis |
-| GET | `/api/policies/products/` | Produkty ubezpieczeniowe |
-| PATCH | `/api/policies/{id}/status/` | Zmiana statusu polisy (agent) |
-| GET | `/api/claims/` | Lista szkód |
-| POST | `/api/claims/` | Utwórz zgłoszenie |
-| POST | `/api/claims/{id}/submit/` | Wyślij szkodę do rozpatrzenia |
-| PATCH | `/api/claims/{id}/status/` | Zmień status (agent) |
-| GET | `/api/claims/queue/` | Kolejka szkód (agent) |
-| GET | `/api/notifications/` | Powiadomienia |
+| Rola | Nazwa użytkownika | Hasło |
+|------|-------------------|-------|
+| Klient | `klient` | `Haslo123!` |
+| Agent | `agent` | `Haslo123!` |
+| Admin | `admin` | `Haslo123!` |
 
-Pełna dokumentacja API dostępna pod: `http://localhost:8000/api/docs/`
+> Uruchom `python manage.py seed_demo_data` aby utworzyć konta demo i przykładowe polisy.
 
-## Funkcje warte uwagi (portfolio)
+## Referencja API (wybrane endpointy)
 
-- **Workflow statusów** z walidacją dozwolonych przejść po stronie backendu i frontendu
-- **Role-based access control** — każda warstwa (model, serializer, view, frontend guard) pilnuje uprawnień
-- **JWT z automatycznym odświeżaniem** — interceptor Angular obsługuje 401 i odnawia token
-- **Historia zmian statusu** — każda zmiana jest audytowana w `ClaimStatusHistory`
-- **Powiadomienia** — automatycznie tworzone przy kluczowych zdarzeniach, polling co 30s
-- **Standalone Components** — Angular 17, lazy loading każdej strony
-- **Swagger UI** — pełna dokumentacja API generowana automatycznie
+| Metoda | Endpoint | Dostęp |
+|--------|----------|--------|
+| POST | `/api/auth/login/` | Publiczny |
+| POST | `/api/auth/register/` | Publiczny |
+| GET | `/api/auth/profile/` | Uwierzytelniony |
+| GET | `/api/policies/` | Uwierzytelniony |
+| GET | `/api/policies/products/` | Uwierzytelniony |
+| PATCH | `/api/policies/{id}/status/` | Agent |
+| GET | `/api/claims/` | Uwierzytelniony |
+| POST | `/api/claims/` | Uwierzytelniony |
+| POST | `/api/claims/{id}/submit/` | Właściciel |
+| PATCH | `/api/claims/{id}/status/` | Agent |
+| GET | `/api/claims/queue/` | Agent |
+| GET | `/api/notifications/` | Uwierzytelniony |
+| GET | `/api/auth/admin/users/` | Admin |
+| POST | `/api/auth/admin/users/` | Admin |
+| PATCH | `/api/auth/admin/users/{id}/role/` | Admin |
+
+Pełna interaktywna dokumentacja: `http://localhost:8000/api/docs/`
+
+## Zmienne Środowiskowe
+
+Zmienne środowiskowe backendu (utwórz `backend/.env` z `backend/.env.example`):
+
+| Zmienna | Domyślna | Opis |
+|---------|----------|------|
+| `SECRET_KEY` | - | **Wymagane** Klucz tajny Django (zmień w produkcji!) |
+| `DEBUG` | `True` | Tryb debugowania (ustaw na `False` w produkcji) |
+| `USE_SQLITE` | `False` | Użyj SQLite zamiast PostgreSQL |
+| `DB_NAME` | `abc_insurance` | Nazwa bazy PostgreSQL |
+| `DB_USER` | `abc_user` | Użytkownik PostgreSQL |
+| `DB_PASSWORD` | - | Hasło PostgreSQL |
+| `DB_HOST` | `localhost` | Host PostgreSQL |
+| `DB_PORT` | `5432` | Port PostgreSQL |
+| `CORS_ALLOWED_ORIGINS` | - | Dozwolone originy CORS (oddzielone przecinkami) |
+
+## Checklista Wdrożenia Produkcyjnego
+
+- [ ] Zmień `SECRET_KEY` na losowy ciąg 50+ znaków
+- [ ] Ustaw `DEBUG=False`
+- [ ] Zaktualizuj dane dostępowe do bazy (silne hasła)
+- [ ] Skonfiguruj `CORS_ALLOWED_ORIGINS` z domeną frontendu
+- [ ] Skonfiguruj certyfikaty SSL/TLS (HTTPS)
+- [ ] Skonfiguruj backend email dla powiadomień
+- [ ] Ustaw kopie zapasowe PostgreSQL
+- [ ] Przejrzyj i zaktualizuj `ALLOWED_HOSTS` w ustawieniach Django
+- [ ] Rozważ użycie plików `.env` specyficznych dla środowiska
+
+## Kategorie Produktów Ubezpieczeniowych
+
+System wspiera 6 kategorii ubezpieczeń:
+
+| Kategoria | Opis |
+|-----------|------|
+| `auto` | Ubezpieczenia komunikacyjne (OC, AC, Assistance) |
+| `property` | Nieruchomości (domy, mieszkania, wyposażenie) |
+| `health` | Zdrowotne (prywatna opieka medyczna, hospitalizacja) |
+| `life` | Na życie (ochrona finansowa dla bliskich) |
+| `travel` | Podróżne (koszty leczenia, bagaż, odwołanie lotu) |
+| `liability` | OC zawodowe (odpowiedzialność cywilna dla firm i freelancerów) |
+
+## Efekty Wizualne Landing Page
+
+Landing page zawiera ponad 20 zaawansowanych efektów wizualnych:
+
+- 🎨 **Particle system** z animowanymi połączeniami
+- ✨ **Custom cursor** z efektem trailing
+- 💫 **Magnetic buttons** reagujące na kursor
+- 🌊 **Ripple effect** przy kliknięciach
+- 🎭 **3D tilt cards** z efektem perspektywy
+- 📊 **Progress rings** z animacją wypełnienia
+- 🔄 **Horizontal scroll section** z drag & drop
+- 🌈 **Mesh gradient** animowany w tle
+- 🎬 **Scroll-snap sections** dla płynnej nawigacji
+- 💎 **Glassmorphism** na elementach UI
+- ⚡ **Floating animations** na ikonach
+- 🔆 **Card shine effect** przy hover
+- 🎯 **Scale parallax** reagujący na scroll
+- 📝 **Text reveal animations** z fade-in
+- 🌟 **Glow effects** na przyciskach
+
+## Licencja
+
+Ten projekt został stworzony jako demonstracja umiejętności fullstack development.

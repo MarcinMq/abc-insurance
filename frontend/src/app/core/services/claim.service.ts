@@ -1,63 +1,44 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import {
-  Claim,
-  ClaimCreateRequest,
-  ClaimStatusUpdateRequest,
-} from '../../shared/models/claim.model';
-import { PaginatedResponse } from './policy.service';
+import { Claim, CreateClaimData } from '../models/claim.model';
+import { PaginatedResponse } from '../models/policy.model';
 
-export interface ClaimFilters {
-  status?: string;
-  incident_type?: string;
-  search?: string;
-  page?: number;
-}
+const API = 'http://localhost:8000/api';
 
 @Injectable({ providedIn: 'root' })
 export class ClaimService {
-  private readonly base = `${environment.apiUrl}/claims`;
-
   constructor(private http: HttpClient) {}
 
-  getClaims(filters?: ClaimFilters): Observable<PaginatedResponse<Claim>> {
-    let params = new HttpParams();
-    if (filters?.status) params = params.set('status', filters.status);
-    if (filters?.incident_type) params = params.set('incident_type', filters.incident_type);
-    if (filters?.search) params = params.set('search', filters.search);
-    if (filters?.page) params = params.set('page', filters.page.toString());
-    return this.http.get<PaginatedResponse<Claim>>(`${this.base}/`, { params });
+  getClaims(page = 1, status?: string, search?: string): Observable<PaginatedResponse<Claim>> {
+    let params = new HttpParams().set('page', page.toString());
+    if (status) params = params.set('status', status);
+    if (search) params = params.set('search', search);
+    return this.http.get<PaginatedResponse<Claim>>(`${API}/claims/`, { params });
   }
 
   getClaim(id: number): Observable<Claim> {
-    return this.http.get<Claim>(`${this.base}/${id}/`);
+    return this.http.get<Claim>(`${API}/claims/${id}/`);
   }
 
-  createClaim(data: ClaimCreateRequest): Observable<Claim> {
-    return this.http.post<Claim>(`${this.base}/`, data);
+  createClaim(data: CreateClaimData): Observable<Claim> {
+    return this.http.post<Claim>(`${API}/claims/`, data);
   }
 
   submitClaim(id: number): Observable<Claim> {
-    return this.http.post<Claim>(`${this.base}/${id}/submit/`, {});
+    return this.http.post<Claim>(`${API}/claims/${id}/submit/`, {});
   }
 
-  updateClaimStatus(id: number, data: ClaimStatusUpdateRequest): Observable<Claim> {
-    return this.http.patch<Claim>(`${this.base}/${id}/status/`, data);
+  updateClaimStatus(id: number, status: string, data: Record<string, unknown> = {}): Observable<Claim> {
+    return this.http.patch<Claim>(`${API}/claims/${id}/status/`, { status, ...data });
   }
 
-  assignAgent(claimId: number, agentId?: number): Observable<Claim> {
-    return this.http.patch<Claim>(`${this.base}/${claimId}/assign/`, {
-      agent_id: agentId,
-    });
+  assignClaim(id: number, agentId: number): Observable<Claim> {
+    return this.http.patch<Claim>(`${API}/claims/${id}/assign/`, { agent_id: agentId });
   }
 
-  uploadDocument(claimId: number, formData: FormData): Observable<any> {
-    return this.http.post(`${this.base}/${claimId}/documents/`, formData);
-  }
-
-  getQueue(): Observable<PaginatedResponse<Claim>> {
-    return this.http.get<PaginatedResponse<Claim>>(`${this.base}/queue/`);
+  getAgentQueue(page = 1): Observable<PaginatedResponse<Claim>> {
+    const params = new HttpParams().set('page', page.toString());
+    return this.http.get<PaginatedResponse<Claim>>(`${API}/claims/queue/`, { params });
   }
 }

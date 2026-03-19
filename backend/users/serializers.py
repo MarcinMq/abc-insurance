@@ -74,6 +74,46 @@ class UserListSerializer(serializers.ModelSerializer):
         return obj.get_full_name()
 
 
+class AdminUserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    date_joined = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name',
+                  'role', 'is_verified', 'is_active', 'date_joined']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+
+class AdminCreateUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    license_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    department = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'first_name', 'last_name',
+                  'role', 'phone_number', 'license_number', 'department']
+
+    def create(self, validated_data):
+        license_number = validated_data.pop('license_number', '')
+        department = validated_data.pop('department', '')
+        user = User.objects.create_user(**validated_data)
+        if user.role == User.Role.AGENT:
+            AgentProfile.objects.create(
+                user=user,
+                license_number=license_number or f'AG{user.id:03d}',
+                department=department or 'Ogólny',
+            )
+        return user
+
+
+class AdminRoleChangeSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=User.Role.choices)
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, validators=[validate_password])

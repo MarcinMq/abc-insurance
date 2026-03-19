@@ -1,55 +1,30 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { Policy, InsuranceProduct } from '../../shared/models/policy.model';
+import { Policy, InsuranceProduct, PaginatedResponse } from '../models/policy.model';
 
-export interface PaginatedResponse<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
-}
-
-export interface PolicyFilters {
-  status?: string;
-  category?: string;
-  search?: string;
-  page?: number;
-}
+const API = 'http://localhost:8000/api';
 
 @Injectable({ providedIn: 'root' })
 export class PolicyService {
-  private readonly base = `${environment.apiUrl}/policies`;
-
   constructor(private http: HttpClient) {}
 
-  getProducts(): Observable<PaginatedResponse<InsuranceProduct>> {
-    return this.http.get<PaginatedResponse<InsuranceProduct>>(`${this.base}/products/`);
+  getProducts(): Observable<InsuranceProduct[]> {
+    return this.http.get<InsuranceProduct[]>(`${API}/policies/products/`);
   }
 
-  getPolicies(filters?: PolicyFilters): Observable<PaginatedResponse<Policy>> {
-    let params = new HttpParams();
-    if (filters?.status) params = params.set('status', filters.status);
-    if (filters?.category) params = params.set('product__category', filters.category);
-    if (filters?.search) params = params.set('search', filters.search);
-    if (filters?.page) params = params.set('page', filters.page.toString());
-    return this.http.get<PaginatedResponse<Policy>>(`${this.base}/`, { params });
+  getPolicies(page = 1, status?: string, search?: string): Observable<PaginatedResponse<Policy>> {
+    let params = new HttpParams().set('page', page.toString());
+    if (status) params = params.set('status', status);
+    if (search) params = params.set('search', search);
+    return this.http.get<PaginatedResponse<Policy>>(`${API}/policies/`, { params });
   }
 
   getPolicy(id: number): Observable<Policy> {
-    return this.http.get<Policy>(`${this.base}/${id}/`);
-  }
-
-  createPolicy(data: Partial<Policy>): Observable<Policy> {
-    return this.http.post<Policy>(`${this.base}/`, data);
+    return this.http.get<Policy>(`${API}/policies/${id}/`);
   }
 
   updatePolicyStatus(id: number, status: string, notes?: string): Observable<Policy> {
-    return this.http.patch<Policy>(`${this.base}/${id}/status/`, { status, notes });
-  }
-
-  uploadDocument(policyId: number, formData: FormData): Observable<any> {
-    return this.http.post(`${this.base}/${policyId}/documents/`, formData);
+    return this.http.patch<Policy>(`${API}/policies/${id}/status/`, { status, notes });
   }
 }

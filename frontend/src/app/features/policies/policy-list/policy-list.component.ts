@@ -1,335 +1,202 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { debounceTime, distinctUntilChanged } from 'rxjs';
+import { FormsModule } from '@angular/forms';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { gsap } from 'gsap';
 import { PolicyService } from '../../../core/services/policy.service';
-import { AuthService } from '../../../core/services/auth.service';
-import { Policy, CATEGORY_ICONS, CATEGORY_COLORS } from '../../../shared/models/policy.model';
+import { Policy } from '../../../core/models/policy.model';
 
 @Component({
   selector: 'app-policy-list',
   standalone: true,
   imports: [
-    CommonModule, RouterLink, ReactiveFormsModule,
-    MatButtonModule, MatIconModule, MatSelectModule, MatProgressSpinnerModule, MatTooltipModule,
+    CommonModule, RouterLink, FormsModule,
+    MatPaginatorModule,
   ],
   template: `
-    <div class="page-wrapper animate-fade-up">
-
-      <!-- Header -->
-      <div class="page-top">
-        <div>
-          <h1 class="page-title">Polisy ubezpieczeniowe</h1>
-          <p class="page-sub">{{ totalCount }} polis w systemie</p>
-        </div>
+    <div class="max-w-[1200px] mx-auto px-4 md:px-8 py-8 md:py-12">
+      <div class="gsap-element mb-10">
+        <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">Moje polisy</h1>
+        <p class="text-gray-400 mt-2 text-lg">Zarządzaj swoimi aktywnymi ubezpieczeniami</p>
       </div>
 
-      <!-- Filters bar -->
-      <div class="filters-bar">
-        <div class="search-box">
-          <mat-icon>search</mat-icon>
-          <input [formControl]="searchCtrl" placeholder="Szukaj polisy, klienta..." />
+      <!-- Filters -->
+      <div class="gsap-element bg-[#161617] border border-white/5 rounded-2xl p-4 md:p-6 mb-8 shadow-xl flex flex-col md:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Szukaj polisy</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
+              <span class="material-icons text-[20px]">search</span>
+            </span>
+            <input 
+              type="text" 
+              [(ngModel)]="searchQuery" 
+              (ngModelChange)="onFilterChange()" 
+              placeholder="Wpisz numer polisy lub nazwę..."
+              class="w-full bg-[#1c1c1e] text-white placeholder-gray-500 border border-white/10 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+          </div>
         </div>
-        <div class="filter-chips">
-          <button *ngFor="let s of statusOptions" class="filter-chip"
-                  [class.active]="statusCtrl.value === s.value"
-                  (click)="toggleStatus(s.value)">
-            {{ s.label }}
-          </button>
-        </div>
-        <div class="cat-select-wrap">
-          <mat-icon class="cat-icon">category</mat-icon>
-          <select [formControl]="categoryCtrl" class="cat-select">
-            <option value="">Wszystkie kategorie</option>
-            <option value="auto">Pojazd</option>
-            <option value="property">Majątkowe</option>
-            <option value="health">Zdrowotne</option>
-            <option value="life">Na życie</option>
-            <option value="travel">Podróżne</option>
-            <option value="liability">OC</option>
-          </select>
-          <mat-icon class="cat-arrow">expand_more</mat-icon>
-        </div>
-      </div>
 
-      <!-- Skeleton loader -->
-      <div *ngIf="loading" class="skeleton-grid">
-        <div *ngFor="let i of [1,2,3,4,5,6]" class="skeleton-card">
-          <div class="skeleton sk-header"></div>
-          <div class="sk-body">
-            <div class="skeleton sk-line-lg"></div>
-            <div class="skeleton sk-line-sm"></div>
-            <div class="skeleton sk-line-sm"></div>
+        <div class="w-full md:w-64">
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Status</label>
+          <div class="relative">
+            <select 
+              [(ngModel)]="statusFilter" 
+              (ngModelChange)="onFilterChange()"
+              class="w-full bg-[#1c1c1e] text-white border border-white/10 rounded-xl py-3 px-4 appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+              <option value="">Wszystkie</option>
+              <option value="active">Aktywne</option>
+              <option value="expired">Wygasłe</option>
+              <option value="cancelled">Anulowane</option>
+              <option value="pending">Oczekujące</option>
+            </select>
+            <span class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-gray-500">
+              <span class="material-icons text-[20px]">expand_more</span>
+            </span>
           </div>
         </div>
       </div>
 
-      <!-- Grid -->
-      <div class="policies-grid" *ngIf="!loading">
-        <div *ngFor="let policy of policies; let i = index" class="policy-card"
-             [routerLink]="['/policies', policy.id]"
-             [style.animation-delay]="i * 40 + 'ms'">
-
-          <!-- Card top banner -->
-          <div class="card-banner" [style.background]="getGradient(policy)">
-            <mat-icon class="banner-icon">{{ getIcon(policy) }}</mat-icon>
-            <div class="banner-right">
-              <div class="banner-num">{{ policy.policy_number }}</div>
-              <div class="banner-status" [style.background]="getStatusBg(policy.status)">
-                {{ policy.status_display }}
-              </div>
-            </div>
+      @if (loading) {
+        <div class="flex justify-center items-center py-20">
+          <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      } @else if (policies.length === 0) {
+        <div class="gsap-element bg-[#161617] border border-white/5 rounded-3xl p-16 text-center shadow-2xl">
+          <div class="w-20 h-20 mx-auto rounded-full bg-white/5 flex items-center justify-center mb-6 text-gray-500">
+            <span class="material-icons text-4xl">shield</span>
           </div>
-
-          <!-- Card body -->
-          <div class="card-body">
-            <div class="policy-name">{{ policy.product?.name || policy.product_name }}</div>
-
-            <div class="policy-stats">
-              <div class="pstat">
-                <div class="pstat-label">Suma ubezp.</div>
-                <div class="pstat-value">{{ policy.coverage_amount | currency:'PLN':'symbol':'1.0-0':'pl' }}</div>
+          <h3 class="text-xl font-semibold text-white mb-2">Brak polis</h3>
+          <p class="text-gray-400">Nie znaleźliśmy polis pasujących do podanych kryteriów.</p>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          @for (policy of policies; track policy.id) {
+            <a [routerLink]="['/policies', policy.id]" class="gsap-element block bg-[#161617] border border-white/5 rounded-3xl p-6 shadow-xl hover:border-white/10 hover:bg-[#1c1c1e] hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 group">
+              <div class="flex justify-between items-start mb-6">
+                <div class="w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <span class="material-icons">{{ getProductIcon(policy.product?.category || policy.product_category || '') }}</span>
+                </div>
+                <span [class]="'px-3 py-1 rounded-full text-xs font-medium border ' + getStatusClasses(policy.status)">
+                  {{ getStatusLabel(policy.status) }}
+                </span>
               </div>
-              <div class="pstat-divider"></div>
-              <div class="pstat">
-                <div class="pstat-label">Składka/mies.</div>
-                <div class="pstat-value">{{ policy.premium_monthly | currency:'PLN':'symbol':'1.0-0':'pl' }}</div>
+              
+              <div class="mb-6">
+                <p class="text-gray-500 text-xs font-mono mb-1">{{ policy.policy_number }}</p>
+                <h3 class="text-xl font-semibold text-white group-hover:text-blue-400 transition-colors">{{ policy.product?.name || policy.product_name || 'Nieznany produkt' }}</h3>
               </div>
-            </div>
 
-            <div class="policy-dates">
-              <mat-icon>calendar_today</mat-icon>
-              {{ policy.start_date | date:'d MMM y' }} — {{ policy.end_date | date:'d MMM y' }}
-            </div>
-
-            <div class="expiry-bar" *ngIf="policy.status === 'active'">
-              <div class="expiry-track">
-                <div class="expiry-fill"
-                     [style.width]="getExpiryPercent(policy) + '%'"
-                     [class.expiry-warn]="(policy.days_to_expiry ?? 999) < 30">
+              <div class="space-y-3 pt-6 border-t border-white/5">
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-gray-400">Okres</span>
+                  <div class="flex items-center text-gray-300">
+                    {{ policy.start_date | date:'dd.MM.yyyy' }}
+                    <span class="material-icons text-[14px] mx-1 text-gray-500">arrow_forward</span>
+                    {{ policy.end_date | date:'dd.MM.yyyy' }}
+                  </div>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-gray-400">Składka</span>
+                  <span class="text-white font-medium">{{ policy.premium_amount }} zł/rok</span>
                 </div>
               </div>
-              <span [class.text-warn]="(policy.days_to_expiry ?? 999) < 30">
-                {{ policy.days_to_expiry }}d do wygaśnięcia
-              </span>
-            </div>
-          </div>
-
-          <!-- Card footer -->
-          <div class="card-footer">
-            <span class="card-owner" *ngIf="auth.isAgent">
-              <mat-icon>person</mat-icon>{{ policy.customer_name }}
-            </span>
-            <span class="card-arrow">→</span>
-          </div>
+            </a>
+          }
         </div>
 
-        <!-- Empty -->
-        <div *ngIf="policies.length === 0" class="empty-state-full">
-          <div class="empty-icon"><mat-icon>policy</mat-icon></div>
-          <h3>Brak polis</h3>
-          <p>Nie znaleziono żadnych polis spełniających kryteria.</p>
+        <div class="gsap-element">
+          <!-- TODO: Paginator z elementami Tailwind zamiast Material -->
+          <mat-paginator
+            class="bg-[#161617] text-white rounded-2xl border border-white/5"
+            [length]="totalCount"
+            [pageSize]="20"
+            [pageIndex]="currentPage - 1"
+            (page)="onPageChange($event)"
+            hidePageSize>
+          </mat-paginator>
         </div>
-      </div>
+      }
     </div>
-  `,
-  styles: [`
-    .page-wrapper { max-width: 1280px; margin: 0 auto; }
-    .page-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-    .page-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
-    .page-sub { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
-
-    /* Filters */
-    .filters-bar {
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      background: white; padding: 12px 16px; border-radius: 14px;
-      border: 1px solid var(--border); margin-bottom: 20px;
-      box-shadow: var(--shadow-sm);
-    }
-    .search-box {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--surface-3); border-radius: 10px;
-      padding: 8px 12px; flex: 1; min-width: 200px;
-    }
-    .search-box mat-icon { color: var(--text-muted); font-size: 18px; }
-    .search-box input {
-      border: none; background: none; outline: none; font-size: 14px;
-      color: var(--text-primary); font-family: inherit; width: 100%;
-    }
-    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .filter-chip {
-      padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
-      border: 1.5px solid var(--border); background: white; cursor: pointer;
-      color: var(--text-secondary); transition: all .15s;
-    }
-    .filter-chip:hover { border-color: #4f46e5; color: #4f46e5; }
-    .filter-chip.active { background: #4f46e5; color: white; border-color: #4f46e5; }
-    .cat-select-wrap {
-      display: flex; align-items: center;
-      border: 1.5px solid var(--border); border-radius: 10px;
-      background: var(--surface-3); overflow: hidden;
-      transition: border-color .2s;
-    }
-    .cat-select-wrap:focus-within { border-color: #4f46e5; background: white; }
-    .cat-icon { color: var(--text-muted); margin: 0 8px; font-size: 16px; flex-shrink: 0; }
-    .cat-arrow { color: var(--text-muted); margin: 0 8px; font-size: 16px; pointer-events: none; flex-shrink: 0; }
-    .cat-select {
-      border: none; background: none; padding: 8px 4px;
-      font-size: 13px; color: var(--text-primary); outline: none;
-      font-family: inherit; cursor: pointer; appearance: none; min-width: 140px;
-    }
-
-    /* Skeleton */
-    .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 16px; }
-    .skeleton-card { background: white; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); }
-    .sk-header { height: 100px; border-radius: 0; }
-    .sk-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-    .sk-line-lg { height: 16px; width: 70%; }
-    .sk-line-sm { height: 12px; width: 50%; }
-
-    /* Policy grid */
-    .policies-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 16px; }
-    .policy-card {
-      background: white; border-radius: 16px; overflow: hidden;
-      border: 1px solid var(--border); cursor: pointer;
-      transition: transform .2s, box-shadow .2s;
-      animation: fadeInUp .4s ease both;
-      box-shadow: var(--shadow-sm);
-    }
-    .policy-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
-
-    /* Banner */
-    .card-banner {
-      padding: 20px; display: flex; justify-content: space-between; align-items: flex-start;
-    }
-    .banner-icon { font-size: 32px; width: 32px; height: 32px; color: rgba(255,255,255,.9); }
-    .banner-right { text-align: right; }
-    .banner-num { font-size: 11px; color: rgba(255,255,255,.65); font-weight: 600; margin-bottom: 4px; }
-    .banner-status {
-      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
-      display: inline-block; color: white;
-    }
-
-    /* Body */
-    .card-body { padding: 16px 16px 12px; }
-    .policy-name { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); }
-    .policy-stats { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
-    .pstat { flex: 1; }
-    .pstat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
-    .pstat-value { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-top: 2px; }
-    .pstat-divider { width: 1px; height: 32px; background: var(--border); }
-    .policy-dates {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 12px; color: var(--text-muted); margin-bottom: 10px;
-    }
-    .policy-dates mat-icon { font-size: 14px; width: 14px; height: 14px; }
-
-    /* Expiry bar */
-    .expiry-bar { display: flex; flex-direction: column; gap: 4px; }
-    .expiry-track { height: 4px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
-    .expiry-fill { height: 100%; background: linear-gradient(90deg,#4f46e5,#06b6d4); border-radius: 99px; transition: width .3s; }
-    .expiry-warn { background: linear-gradient(90deg,#f59e0b,#ef4444) !important; }
-    .expiry-bar span { font-size: 11px; color: var(--text-muted); }
-    .text-warn { color: #f59e0b !important; font-weight: 600; }
-
-    /* Footer */
-    .card-footer {
-      padding: 10px 16px; border-top: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .card-owner { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); }
-    .card-owner mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .card-arrow mat-icon { color: var(--text-muted); font-size: 18px; transition: color .15s; }
-    .policy-card:hover .card-arrow mat-icon { color: #4f46e5; }
-
-    /* Empty */
-    .empty-state-full {
-      grid-column: 1 / -1; text-align: center; padding: 64px 24px;
-      background: white; border-radius: 16px; border: 1px solid var(--border);
-    }
-    .empty-icon mat-icon { font-size: 64px; width: 64px; height: 64px; opacity: .2; display: block; margin: 0 auto 16px; }
-    .empty-state-full h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-    .empty-state-full p { color: var(--text-secondary); }
-  `],
+  `
 })
-export class PolicyListComponent implements OnInit {
+export class PolicyListComponent implements OnInit, AfterViewInit {
+  private policyService = inject(PolicyService);
+  private el = inject(ElementRef);
+
+  loading = true;
   policies: Policy[] = [];
-  loading = false;
   totalCount = 0;
+  currentPage = 1;
+  searchQuery = '';
+  statusFilter = '';
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  searchCtrl = new FormControl('');
-  statusCtrl = new FormControl('');
-  categoryCtrl = new FormControl('');
+  ngOnInit(): void { this.loadPolicies(); }
 
-  statusOptions = [
-    { value: 'active', label: 'Aktywna' },
-    { value: 'pending', label: 'Oczekująca' },
-    { value: 'expired', label: 'Wygasła' },
-    { value: 'cancelled', label: 'Anulowana' },
-  ];
+  ngAfterViewInit() {
+    this.animateElements();
+  }
 
-  private gradients: Record<string, string> = {
-    auto: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
-    property: 'linear-gradient(135deg,#047857,#10b981)',
-    health: 'linear-gradient(135deg,#b91c1c,#ef4444)',
-    life: 'linear-gradient(135deg,#6d28d9,#a855f7)',
-    travel: 'linear-gradient(135deg,#0e7490,#06b6d4)',
-    liability: 'linear-gradient(135deg,#c2410c,#f97316)',
-  };
-  private icons: Record<string, string> = {
-    auto: 'directions_car', property: 'home', health: 'health_and_safety',
-    life: 'favorite', travel: 'flight', liability: 'shield',
-  };
-
-  constructor(private policyService: PolicyService, public auth: AuthService) {}
-
-  ngOnInit(): void {
-    this.loadPolicies();
-    this.searchCtrl.valueChanges.pipe(debounceTime(400), distinctUntilChanged())
-      .subscribe(() => this.loadPolicies());
-    this.categoryCtrl.valueChanges.subscribe(() => this.loadPolicies());
+  animateElements() {
+    const elements = this.el.nativeElement.querySelectorAll('.gsap-element');
+    if (elements.length > 0) {
+      gsap.fromTo(elements, 
+        { y: 30, opacity: 0 }, 
+        { y: 0, opacity: 1, duration: 0.6, stagger: 0.05, ease: 'power3.out', overwrite: true }
+      );
+    }
   }
 
   loadPolicies(): void {
     this.loading = true;
-    this.policyService.getPolicies({
-      status: this.statusCtrl.value || undefined,
-      category: this.categoryCtrl.value || undefined,
-      search: this.searchCtrl.value || undefined,
-    }).subscribe({
-      next: r => { this.policies = r.results; this.totalCount = r.count; this.loading = false; },
-      error: () => { this.loading = false; },
+    this.policyService.getPolicies(this.currentPage, this.statusFilter, this.searchQuery).subscribe({
+      next: data => {
+        this.policies = data.results;
+        this.totalCount = data.count;
+        this.loading = false;
+        setTimeout(() => this.animateElements(), 50);
+      },
+      error: () => { this.loading = false; }
     });
   }
 
-  toggleStatus(val: string): void {
-    this.statusCtrl.setValue(this.statusCtrl.value === val ? '' : val);
+  onFilterChange(): void {
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.currentPage = 1;
+      this.loadPolicies();
+    }, 300);
+  }
+
+  onPageChange(event: PageEvent): void {
+    this.currentPage = event.pageIndex + 1;
     this.loadPolicies();
   }
 
-  getGradient(p: Policy): string {
-    const cat = (p.product as any)?.category || p.product_category || '';
-    return this.gradients[cat] || 'linear-gradient(135deg,#4f46e5,#06b6d4)';
-  }
-  getIcon(p: Policy): string {
-    const cat = (p.product as any)?.category || p.product_category || '';
-    return this.icons[cat] || 'policy';
-  }
-  getStatusBg(status: string): string {
-    const m: Record<string, string> = {
-      active: 'rgba(16,185,129,.3)', pending: 'rgba(99,102,241,.3)',
-      expired: 'rgba(100,116,139,.3)', cancelled: 'rgba(239,68,68,.3)', suspended: 'rgba(245,158,11,.3)',
+  getProductIcon(category: string): string {
+    const icons: Record<string, string> = {
+      auto: 'directions_car', property: 'home', health: 'favorite',
+      life: 'person', travel: 'flight', liability: 'gavel',
     };
-    return m[status] || 'rgba(0,0,0,.2)';
+    return icons[category] || 'shield';
   }
-  getExpiryPercent(p: Policy): number {
-    const days = p.days_to_expiry ?? 365;
-    return Math.max(0, Math.min(100, (days / 365) * 100));
+
+  getStatusClasses(status: string): string {
+    const classes: Record<string, string> = {
+      active: 'bg-green-500/10 text-green-400 border-green-500/20',
+      expired: 'bg-white/5 text-gray-400 border-white/10',
+      cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
+      pending: 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+    };
+    return classes[status] || classes['expired'];
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      active: 'Aktywna', expired: 'Wygasła', cancelled: 'Anulowana', pending: 'Oczekująca'
+    };
+    return labels[status] || status;
   }
 }
